@@ -1,6 +1,6 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC 1     Version vom 28.04.2021  *
+; *  HRCPM12-BIOS fuer den AC 1     Version vom 10.05.2021  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -123,6 +123,8 @@ DPH6:   DEFW 0            ;Floppy G:
         DEFW CHK06
         DEFW ALL06
 ;
+; https://hc-ddr.hucki.net/wiki/doku.php/cpm/write_a_bios/teil_1
+;
         DEFW LEDF1        ;???
 ;
 DPB0:   DEFW 128          ;128 Sectoren/Track
@@ -131,11 +133,11 @@ DPB0:   DEFW 128          ;128 Sectoren/Track
         DEFB 0
         DEFW 503          ;503 * 2 Kbyte - Bloecke
         DEFW 63           ;64 DIR - Eintaege
-        DEFW 080H         ;??? DIR-Bloecke
+        DEFW 080H         ;1 DIR-Block
         DEFW 0            ;weil nichtwechselbares Medium
-        DEFW 1            ;??? Kbyte System
+        DEFW 1            ;32 Kbyte System
 ;
-        DEFW 0F019H       ;???
+        DEFW LF019        ;???
 ;
 DPB1:   DEFW 80           ;80 Sectoren/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
@@ -149,8 +151,9 @@ DPB1:   DEFW 80           ;80 Sectoren/Track
 ;
         DEFB 3,7,5,25H
         DEFB 50H,0,43H,0FFH
-        DEFB 0E1H,33H,0FFH,15H
-        DEFB 0F0H
+        DEFB 0E1H,33H,0FFH
+;
+        DEFW LF015        ;???
 ;
 DPB2:   DEFW 0800H
         DEFB 5
@@ -164,8 +167,9 @@ DPB2:   DEFW 0800H
 ;
         DEFB 2,3,0A0H,0AH
         DEFB 0,40H,0,0D8H
-        DEFB 3,10H,20H,15H
-        DEFB 0F0H
+        DEFB 3,10H,20H
+;
+        DEFW LF015        ;???
 ;
 DPB3:   DEFW 0800H
         DEFB 6
@@ -179,8 +183,9 @@ DPB3:   DEFW 0800H
 ;
         DEFB 2,3,0A0H,96H
         DEFB 0,40H,0,0D8H
-        DEFB 3,10H,20H,15H
-        DEFB 0F0H
+        DEFB 3,10H,20H
+;
+        DEFW LF015        ;???
 ;
 DPB4:   DEFW 0800H
         DEFB 6
@@ -194,8 +199,9 @@ DPB4:   DEFW 0800H
 ;
         DEFB 2,3,0A0H,2CH
         DEFB 1,40H,0,0D8H
-        DEFB 3,10H,20H,19H
-        DEFB 0F0H
+        DEFB 3,10H,20H
+;
+        DEFW LF019        ;???
 ;
 DPB5:   DEFW 64           ;64 Sectoren/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
@@ -209,8 +215,9 @@ DPB5:   DEFW 64           ;64 Sectoren/Track
 ;
         DEFB 1,1,10H,14H
         DEFB 50H,0,43H,0FFH
-        DEFB 0E1H,33H,0FFH,19H
-        DEFB 0F0H
+        DEFB 0E1H,33H,0FFH
+;
+        DEFW LF019        ;???
 ;
 DPB6:   DEFW 80           ;80 Sectoren/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
@@ -312,10 +319,10 @@ WBOOT:  LD   SP,0F4C1H
         OR   A 
         CALL NZ,LF0CE 
         LD   B,2CH 
-        LD   HL,0EDC5H
+        LD   HL,READ
         LD   (DEEDA),HL 
         CALL WRCCP 
-        LD   HL,0EDCAH
+        LD   HL,WRITE
         LD   (DEEDA),HL 
 WBOOT1: CALL LE92D 
         LD   A,01H 
@@ -1034,8 +1041,9 @@ SECTRN: LD   H,B
 ;
 READ:   LD   C,02H 
         LD   A,04H 
-        LD   HL,063EH 
-        LD   (DF4FB),A 
+        DEFB 21H          ;LD HL,063EH mit nxt. Befahl!!!
+WRITE:  LD   A,06H
+        LD   (DF4FB),A    ;hier geht es fuer READ weiter!
         LD   A,C 
         LD   (DF51E),A 
         LD   HL,LEDEC
@@ -1370,7 +1378,7 @@ LF002:  PUSH DE
 LF015:  INC  HL 
         SET  7,(HL) 
         DEC  HL 
-        XOR  A 
+LF019:  XOR  A 
         LD   (DF51C),A 
         CALL LF024 
         LD   A,(DF51C) 
@@ -2051,7 +2059,6 @@ L07F1   EQU  07F1H
 L0B32   EQU  0B32H 
 L77F4   EQU  77F4H 
 LED3C   EQU  0ED3CH
-WRITE   EQU  0EDCAH
 LEE65   EQU  0EE65H
 LEE8C   EQU  0EE8CH
 LEF69   EQU  0EF69H
