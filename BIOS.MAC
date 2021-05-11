@@ -1041,7 +1041,7 @@ SECTRN: LD   H,B
 ;
 READ:   LD   C,02H 
         LD   A,04H 
-        DEFB 21H          ;LD HL,063EH mit nxt. Befahl!!!
+        DEFB 21H          ;LD HL,063EH mit nxt. Befehl!!!
 WRITE:  LD   A,06H
         LD   (DF4FB),A    ;hier geht es fuer READ weiter!
         LD   A,C 
