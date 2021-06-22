@@ -1207,11 +1207,11 @@ RDERRO: LD   HL,RFLERR
 ;
 LEEF8:  XOR  A 
         LD   L,A 
-        LD   A,(DF4C3) 
+        LD   A,(DF4C3)    ;(RAFSEC)
         LD   H,A 
         RR   H 
         RR   L 
-        LD   A,(DF4C2) 
+        LD   A,(DF4C2)    ;(RAFTRK)
         RR   A 
         JR   NC,LEF0B 
         SET  6,H 
