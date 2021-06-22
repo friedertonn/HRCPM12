@@ -1205,19 +1205,19 @@ RDERRO: LD   HL,RFLERR
         DEC  A 
         RET 
 ;
-LEEF8:  XOR  A 
+LEEF8:  XOR  A            ;L=RADR 0-7 , H=RADR 8-15 , A=RADR 16-19(21)
         LD   L,A 
         LD   A,(DF4C3)    ;(RAFSEC)
-        LD   H,A 
+        LD   H,A          ;H=Record (max. 128 = Bit 0-6)
         RR   H 
-        RR   L 
-        LD   A,(DF4C2)    ;(RAFTRK)
-        RR   A 
+        RR   L            ;H0 -> L7 ...... H6 -> H5
+        LD   A,(DF4C2)    ;(RAFTRK) , A=Track (max. 64 bei 1M (256 bei 4M) = Bit 0-5(7)
+        RR   A            ;A0 -> CY
         JR   NC,LEF0B 
-        SET  6,H 
-LEF0B:  RR   A 
+        SET  6,H          ;H6 = A0 (RADR14)
+LEF0B:  RR   A            ;A1 -> CY 
         JR   NC,LEF11 
-        SET  7,H 
+        SET  7,H          ;H7 = A1 (RADR15) 
 LEF11:  PUSH AF 
         AND  03H 
         OR   0E0H
