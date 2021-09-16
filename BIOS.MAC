@@ -1,6 +1,6 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC 1     Version vom 11.05.2021  *
+; *  HRCPM12-BIOS fuer den AC 1     Version vom 16.09.2021  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -23,6 +23,11 @@ EQUCCP  EQU  0D000H       ;Start CCP
 PE5     EQU  0E5H         ;RAM-Disk Extended-Adresse
 PE6     EQU  0E6H         ;RAM-Disk H-Adresse
 PE7     EQU  0E7H         ;RAM-Disk L-Adresse
+;
+CFDC    EQU  40H          ;Hauptstatusregister FDC
+DFDC    EQU  41H          ;Datenport FDC
+WAIT    EQU  43H          ;IO-Adr. /WAIT Monoflop
+LATCH   EQU  45H          ;IO-Adr. Latch 74LS175
 ;
         JP   BOOT
         JP   WBOOT
@@ -254,7 +259,7 @@ TEXT1:  DEFB 0CH
 BOOT:   DI
         LD   SP,0F4C1H
         XOR  A
-        LD   (DF4FA),A
+        LD   (LATPU),A
         LD   A,82H
         LD   (DF4CD),A
         LD   A,20H
@@ -1550,7 +1555,7 @@ LF163:  PUSH BC
 LF175:  LD   A,03H
         LD   B,02H
         LD   HL,0F4EEH
-        OUT  (P41),A
+        OUT  (DFDC),A
         CALL LF230
         CALL LF1E7
         JR   NZ,LF1C1
@@ -1579,8 +1584,8 @@ LF18D:  ADD  HL,HL
         POP  HL
         POP  DE
         LD   B,E
-        LD   C,41H
-        CALL LF262
+        LD   C,DFDC       ;Datenport FDC
+        CALL RW           ;FDC RW-Routine
         EI
         CALL LF1C8
         LD   HL,0F4F0H
@@ -1648,7 +1653,7 @@ LF233:  LD   DE,1FFFH
 LF236:  LD   A,E
         OR   D
         JR   Z,LF247
-        IN   A,(P40)
+        IN   A,(CFDC)
         AND  0C0H
         CP   80H
         DEC  DE
@@ -1665,32 +1670,36 @@ LF24F:  LD   A,L
         OR   H
         LD   A,0C0H
         JR   Z,LF260
-        IN   A,(P40)
+        IN   A,(CFDC)
         AND  0C0H
         CP   0C0H
         DEC  HL
         JR   NZ,LF24F
-        IN   A,(P41)
+        IN   A,(DFDC)
 LF260:  POP  HL
         RET
 ;
-LF262:  LD   A,(DF4FA)
-        SET  1,A
-        OUT  (P45),A
-LF269:  IN   A,(P40)
+;
+;       READ/WRITE Routine
+;       ------------------
+;
+RW:     LD   A,(LATPU)
+        SET  1,A          ;Aufheben Reset
+        OUT  (LATCH),A    ;des WAIT Monofl.
+RW01:   IN   A,(CFDC)
         RLCA
-        JR   NC,LF269
+        JR   NC,RW01
         INI
         NOP
-LF271:  OUT  (P43),A
+RW02:   OUT  (WAIT),A     ;WAIT bis INT FDC
         NOP
         INI
-        JP   NZ,LF271
+        JP   NZ,RW02
         DEC  D
-        JP   NZ,LF271
-        LD   A,(DF4FA)
-        SET  4,A
-        OUT  (P45),A
+        JP   NZ,RW02
+        LD   A,(LATPU)
+        SET  4,A          ;Terminal Count
+        OUT  (LATCH),A
         RET
 ;
 LF285:  LD   HL,0F4F8H
@@ -1703,7 +1712,7 @@ LF285:  LD   HL,0F4F8H
         LD   (HL),48H
         PUSH AF
         PUSH HL
-        LD   HL,0F4FAH
+        LD   HL,LATPU
         LD   A,(DF4E4)
         AND  03H
         JR   Z,LF2A7
@@ -1712,9 +1721,9 @@ LF285:  LD   HL,0F4F8H
         SET  3,(HL)
         JR   LF2A9
 ;
-LF2A7:  SET  0,(HL)
+LF2A7:  SET  0,(HL)       ;Floppy-LW A: Motor an
 LF2A9:  LD   A,(HL)
-        OUT  (P45),A
+        OUT  (LATCH),A
         POP  HL
         POP  AF
         JR   NZ,LF2B4
@@ -1765,11 +1774,11 @@ LF2DD:  JR   NZ,LF323
         LD   (DF4F9),A
         JR   NZ,LF303
         PUSH HL
-        LD   HL,0F4FAH
-        RES  0,(HL)
-        RES  3,(HL)
+        LD   HL,LATPU
+        RES  0,(HL)       ;Floppy-LW A: Motor aus
+        RES  3,(HL)       ;Floppy-LW B: Motor aus
         LD   A,(HL)
-        OUT  (P45),A
+        OUT  (LATCH),A
         POP  HL
 LF303:  POP  AF
         EI
@@ -2000,7 +2009,7 @@ DF4EB:  NOP
 DF4F7:  NOP
         NOP
 DF4F9:  NOP
-DF4FA:  NOP
+LATPU:  NOP
 DF4FB:  DEFB 4
         NOP
 TRACK:  DEFW 0
@@ -2109,10 +2118,6 @@ P05     EQU  05H
 P06     EQU  06H
 P11     EQU  11H
 P1E     EQU  1EH
-P40     EQU  40H
-P41     EQU  41H
-P43     EQU  43H
-P45     EQU  45H
 P8A     EQU  8AH
 P8B     EQU  8BH
 P8C     EQU  8CH

@@ -3,7 +3,7 @@
 
                                 ; ***********************************************************
                                 ; *                                                         *
-                                ; *  HRCPM12-BIOS fuer den AC 1     Version vom 10.05.2021  *
+                                ; *  HRCPM12-BIOS fuer den AC 1     Version vom 16.09.2021  *
                                 ; *                                                         *
                                 ; ***********************************************************
                                 ;
@@ -2444,7 +2444,3 @@ EEC0 	WRCCP           EED1 	WRCCP1          EDCA 	WRITE
 
 
 No Fatal error(s)
-
-
-    
-EA93 	PUNCH           EEEF
