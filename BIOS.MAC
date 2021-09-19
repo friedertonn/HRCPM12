@@ -1,6 +1,6 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC 1     Version vom 16.09.2021  *
+; *  HRCPM12-BIOS fuer den AC 1     Version vom 19.09.2021  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -1554,8 +1554,8 @@ LF163:  PUSH BC
 ;
 LF175:  LD   A,03H
         LD   B,02H
-        LD   HL,0F4EEH
-        OUT  (DFDC),A
+        LD   HL,CTAB      ;FDC Befehlsbyte
+        OUT  (DFDC),A     ;Datenport FDC
         CALL LF230
         CALL LF1E7
         JR   NZ,LF1C1
@@ -1652,14 +1652,14 @@ LF230:  LD   C,41H
 LF233:  LD   DE,1FFFH
 LF236:  LD   A,E
         OR   D
-        JR   Z,LF247
-        IN   A,(CFDC)
+        JR   Z,LF247      ;Abbruch nach 8192 Versuchen
+        IN   A,(CFDC)     ;Lese Hauptstatusregister
         AND  0C0H
-        CP   80H
+        CP   80H          ;FDC bereit zum Schreiben?
         DEC  DE
-        JR   NZ,LF236
-        OUTI
-        JR   NZ,LF233
+        JR   NZ,LF236     ;noch nicht bereit
+        OUTI              ;1 Byte --> FDC
+        JR   NZ,LF233     ;Wdhlg., bis B=0
 LF247:  LD   B,00H
         POP  DE
         RET
@@ -1669,29 +1669,29 @@ LF24B:  PUSH HL
 LF24F:  LD   A,L
         OR   H
         LD   A,0C0H
-        JR   Z,LF260
-        IN   A,(CFDC)
+        JR   Z,LF260      ;Abbruch nach 8192 Versuchen
+        IN   A,(CFDC)     ;Lese Hauptstatusregister
         AND  0C0H
-        CP   0C0H
+        CP   0C0H         ;FDC bereit zum Lesen?
         DEC  HL
-        JR   NZ,LF24F
-        IN   A,(DFDC)
+        JR   NZ,LF24F     ;noch nicht bereit
+        IN   A,(DFDC)     ;1 Byte vom FDC lesen --> A
 LF260:  POP  HL
         RET
 ;
 ;
-;       READ/WRITE Routine
-;       ------------------
+;       FDC READ/WRITE Routine
+;       ----------------------
 ;
 RW:     LD   A,(LATPU)
         SET  1,A          ;Aufheben Reset
         OUT  (LATCH),A    ;des WAIT Monofl.
-RW01:   IN   A,(CFDC)
+RW01:   IN   A,(CFDC)     ;Lese Hauptstatusregister
         RLCA
-        JR   NC,RW01
+        JR   NC,RW01      ;FDC noch nicht bereit
         INI
         NOP
-RW02:   OUT  (WAIT),A     ;WAIT bis INT FDC
+RW02:   OUT  (WAIT),A     ;WAIT bis Interrupt FDC
         NOP
         INI
         JP   NZ,RW02
@@ -1721,7 +1721,7 @@ LF285:  LD   HL,0F4F8H
         SET  3,(HL)
         JR   LF2A9
 ;
-LF2A7:  SET  0,(HL)       ;Floppy-LW A: Motor an
+LF2A7:  SET  0,(HL)       ;Floppy-LW 0: Motor an
 LF2A9:  LD   A,(HL)
         OUT  (LATCH),A
         POP  HL
@@ -1775,8 +1775,8 @@ LF2DD:  JR   NZ,LF323
         JR   NZ,LF303
         PUSH HL
         LD   HL,LATPU
-        RES  0,(HL)       ;Floppy-LW A: Motor aus
-        RES  3,(HL)       ;Floppy-LW B: Motor aus
+        RES  0,(HL)       ;Floppy-LW 0: Motor aus
+        RES  3,(HL)       ;Floppy-LW 1: Motor aus
         LD   A,(HL)
         OUT  (LATCH),A
         POP  HL
@@ -1997,7 +1997,7 @@ DF4EA:  NOP
 DF4EB:  NOP
         NOP
         NOP
-        NOP
+CTAB:   NOP               ;FDC Befehlsbyte
         NOP
         NOP
         NOP
