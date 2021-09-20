@@ -3,7 +3,7 @@
 
                                 ; ***********************************************************
                                 ; *                                                         *
-                                ; *  HRCPM12-BIOS fuer den AC 1     Version vom 19.09.2021  *
+                                ; *  HRCPM12-BIOS fuer den AC 1     Version vom 20.09.2021  *
                                 ; *                                                         *
                                 ; ***********************************************************
                                 ;
@@ -314,7 +314,7 @@
   E83F    F3                    BOOT:   DI
   E840    31 F4C1                       LD   SP,0F4C1H
   E843    AF                            XOR  A
-  E844    32 F4FA                       LD   (LATPU),A
+  E844    32 F4FA                       LD   (LATPU),A    ;FDC-Latch zuruecksetzen
   E847    3E 82                         LD   A,82H
   E849    32 F4CD                       LD   (DF4CD),A
   E84C    3E 20                         LD   A,20H
@@ -1705,8 +1705,8 @@
   F19F    0F                            RRCA
   F1A0    3E 51                         LD   A,51H
   F1A2    8F                            ADC  A,A
-  F1A3    32 F26F                       LD   (DF26F),A
-  F1A6    32 F275                       LD   (DF275),A
+  F1A3    32 F26F                       LD   (MODE0),A    ;A2 --> INI
+  F1A6    32 F275                       LD   (MODE1),A    ;A3 --> OUTI
   F1A9    F3                            DI
   F1AA    CD F227                       CALL LF227
   F1AD    E1                            POP  HL
@@ -1815,28 +1815,30 @@
                                 ;       ----------------------
                                 ;
   F262    3A F4FA               RW:     LD   A,(LATPU)
-  F265    CB CF                         SET  1,A          ;Aufheben Reset
-  F267    D3 45                         OUT  (LATCH),A    ;des WAIT Monofl.
+  F265    CB CF                         SET  1,A
+  F267    D3 45                         OUT  (LATCH),A    ;WAIT-Freigabe
   F269    DB 40                 RW01:   IN   A,(CFDC)     ;Lese Hauptstatusregister
 	MACRO-80 3.44	09-Dec-81	PAGE	1-28
 
 
   F26B    07                            RLCA
   F26C    30 FB                         JR   NC,RW01      ;FDC noch nicht bereit
-  F26E    ED A2                         INI
+  F26E    ED                            DEFB 0EDH         ;ED A2 = INI
+  F26F    A2                    MODE0:  DEFB 0A2H         ;ED A3 = OUTI
   F270    00                            NOP
   F271    D3 43                 RW02:   OUT  (WAIT),A     ;WAIT bis Interrupt FDC
   F273    00                            NOP
-  F274    ED A2                         INI
+  F274    ED                            DEFB 0EDH         ;ED A2 = INI
+  F275    A2                    MODE1:  DEFB 0A2H         ;ED A3 = OUTI
   F276    C2 F271                       JP   NZ,RW02
   F279    15                            DEC  D
   F27A    C2 F271                       JP   NZ,RW02
   F27D    3A F4FA                       LD   A,(LATPU)
   F280    CB E7                         SET  4,A          ;Terminal Count
-  F282    D3 45                         OUT  (LATCH),A
+  F282    D3 45                         OUT  (LATCH),A    ;TC + WAIT-Sperrung
   F284    C9                            RET
                                 ;
-  F285    21 F4F8               LF285:  LD   HL,0F4F8H
+  F285    21 F4F8               LF285:  LD   HL,DF4F8
   F288    3A F4E4                       LD   A,(DF4E4)
   F28B    E6 03                         AND  03H
   F28D    BE                            CP   (HL)
@@ -1852,7 +1854,7 @@
   F29D    28 08                         JR   Z,LF2A7
   F29F    FE 02                         CP   02H
   F2A1    28 04                         JR   Z,LF2A7
-  F2A3    CB DE                         SET  3,(HL)
+  F2A3    CB DE                         SET  3,(HL)       ;Floppy-LW 1: Motor an
   F2A5    18 02                         JR   LF2A9
                                 ;
   F2A7    CB C6                 LF2A7:  SET  0,(HL)       ;Floppy-LW 0: Motor an
@@ -1873,7 +1875,7 @@
   F2BE    A7                            AND  A
   F2BF    20 08                         JR   NZ,LF2C9
   F2C1    E5                            PUSH HL
-  F2C2    21 F2DD                       LD   HL,0F2DDH
+  F2C2    21 F2DD                       LD   HL,DISCTX
   F2C5    CD EA1A                       CALL OUTTXT
   F2C8    E1                            POP  HL
   F2C9    C5                    LF2C9:  PUSH BC
@@ -1881,28 +1883,22 @@
   F2CB    01 0204                       LD   BC,0204H
   F2CE    CD F22C                       CALL LF22C
   F2D1    CD F24B                       CALL LF24B
-  F2D4    E1                            POP  HL
-  F2D5    C1                            POP  BC
 	MACRO-80 3.44	09-Dec-81	PAGE	1-29
 
 
+  F2D4    E1                            POP  HL
+  F2D5    C1                            POP  BC
   F2D6    CB 6F                         BIT  5,A
   F2D8    28 E3                         JR   Z,LF2BD
   F2DA    36 90                         LD   (HL),90H
   F2DC    C9                            RET
-                                ;Ansprung unklar
-  F2DD    20 44                 LF2DD:  JR   NZ,LF323
-  F2DF    49                            LD   C,C
-  F2E0    53                            LD   D,E
-  F2E1    43                            LD   B,E
-  F2E2    3F                            CCF
-  F2E3    08                            EX   AF,AF'
-  F2E4    08                            EX   AF,AF'
-  F2E5    08                            EX   AF,AF'
-  F2E6    08                            EX   AF,AF'
-  F2E7    08                            EX   AF,AF'
-  F2E8    08                            EX   AF,AF'
+                                ;
+  F2DD    20 44 49 53           DISCTX: DEFM ' DISC?'
+  F2E1    43 3F                 
+  F2E3    08 08 08 08                   DEFB 8,8,8,8,8,8
+  F2E7    08 08                 
   F2E9    00                            NOP
+                                ;
   F2EA    F5                            PUSH AF
   F2EB    3A F4F9                       LD   A,(DF4F9)
   F2EE    A7                            AND  A
@@ -1939,7 +1935,7 @@
   F320    3D                            DEC  A
   F321    57                            LD   D,A
   F322    5D                            LD   E,L
-  F323    2E 11                 LF323:  LD   L,11H
+  F323    2E 11                         LD   L,11H
   F325    CD F002                       CALL LF002
   F328    B2                            OR   D
   F329    D3 8E                         OUT  (P8E),A
@@ -1948,13 +1944,13 @@
   F32E    23                            INC  HL
   F32F    5E                            LD   E,(HL)
   F330    23                            INC  HL
-	MACRO-80 3.44	09-Dec-81	PAGE	1-30
-
-
   F331    56                            LD   D,(HL)
   F332    2A F50F                       LD   HL,(DF50F)
   F335    19                            ADD  HL,DE
   F336    7D                            LD   A,L
+	MACRO-80 3.44	09-Dec-81	PAGE	1-30
+
+
   F337    D3 8C                         OUT  (P8C),A
   F339    7C                            LD   A,H
   F33A    D3 8D                         OUT  (P8D),A
@@ -2013,13 +2009,13 @@
   F399    07                            RLCA
   F39A    07                            RLCA
   F39B    07                            RLCA
-	MACRO-80 3.44	09-Dec-81	PAGE	1-31
-
-
   F39C    5F                            LD   E,A
   F39D    05                            DEC  B
   F39E    ED 78                         IN   A,(C)
   F3A0    E6 0F                         AND  0FH
+	MACRO-80 3.44	09-Dec-81	PAGE	1-31
+
+
   F3A2    B3                            OR   E
   F3A3    5E                            LD   E,(HL)
   F3A4    77                            LD   (HL),A
@@ -2078,13 +2074,13 @@
   F3F9    CD E957                       CALL LE957
   F3FC    F1                            POP  AF
   F3FD    FB                            EI
-	MACRO-80 3.44	09-Dec-81	PAGE	1-32
-
-
   F3FE    C9                            RET
                                 ;Ansprung unklar
   F3FF    F3                    LF3FF:  DI
   F400    F5                            PUSH AF
+	MACRO-80 3.44	09-Dec-81	PAGE	1-32
+
+
   F401    CD E95C                       CALL LE95C
   F404    CD 07F1                       CALL L07F1
   F407    CF                            RST  08H
@@ -2143,13 +2139,13 @@
                                 ;
   F4C1    00                            NOP
   F4C2    00                            NOP
-	MACRO-80 3.44	09-Dec-81	PAGE	1-33
-
-
   F4C3    00                    DF4C3:  NOP
   F4C4    00                            NOP
   F4C5    00                            NOP
   F4C6    00                            NOP
+	MACRO-80 3.44	09-Dec-81	PAGE	1-33
+
+
   F4C7    00                            NOP
   F4C8    00                            NOP
   F4C9    00                            NOP
@@ -2197,7 +2193,7 @@
   F4F5    00                            NOP
   F4F6    00                            NOP
   F4F7    00                    DF4F7:  NOP
-  F4F8    00                            NOP
+  F4F8    00                    DF4F8:  NOP
   F4F9    00                    DF4F9:  NOP
   F4FA    00                    LATPU:  NOP
   F4FB    04                    DF4FB:  DEFB 4
@@ -2208,13 +2204,13 @@
   F503    00                    DPH:    NOP
   F504    00                            NOP
   F505    00                            NOP
-	MACRO-80 3.44	09-Dec-81	PAGE	1-34
-
-
   F506    00                    DF506:  NOP
   F507    00                            NOP
   F508    00                    DF508:  NOP
   F509    00                            NOP
+	MACRO-80 3.44	09-Dec-81	PAGE	1-34
+
+
   F50A    00                    DF50A:  NOP
   F50B    00                            NOP
   F50C    00                            NOP
@@ -2273,13 +2269,13 @@
   0000                          D0000   EQU  0000H        ;Die Datenworte muessen alle noch aufgeloest werden!
   0001                          D0001   EQU  0001H
   0003                          D0003   EQU  0003H
-	MACRO-80 3.44	09-Dec-81	PAGE	1-35
-
-
   0004                          D0004   EQU  0004H
   0005                          D0005   EQU  0005H
   0006                          D0006   EQU  0006H
   0038                          D0038   EQU  0038H
+	MACRO-80 3.44	09-Dec-81	PAGE	1-35
+
+
   0039                          D0039   EQU  0039H
   0066                          D0066   EQU  0066H
   0067                          D0067   EQU  0067H
@@ -2289,8 +2285,6 @@
   185B                          D185B   EQU  185BH
   185D                          D185D   EQU  185DH
   EEDA                          DEEDA   EQU  0EEDAH
-  F26F                          DF26F   EQU  0F26FH
-  F275                          DF275   EQU  0F275H
   F4C2                          DF4C2   EQU  0F4C2H
   F4CE                          DF4CE   EQU  0F4CEH
   F4CF                          DF4CF   EQU  0F4CFH
@@ -2341,25 +2335,25 @@ EA2C 	CONST           F4EE 	CTAB            0000 	D0000
 0039 	D0039           0066 	D0066           0067 	D0067           
 1800 	D1800           1818 	D1818           181F 	D181F           
 185B 	D185B           185D 	D185D           EEDA 	DEEDA           
-F26F 	DF26F           F275 	DF275           F4C2 	DF4C2           
-F4C3 	DF4C3           F4CA 	DF4CA           F4CD 	DF4CD           
-F4CE 	DF4CE           F4CF 	DF4CF           F4D0 	DF4D0           
-F4D1 	DF4D1           F4D2 	DF4D2           F4D3 	DF4D3           
-F4D4 	DF4D4           F4D5 	DF4D5           F4D8 	DF4D8           
-F4DA 	DF4DA           F4DC 	DF4DC           F4DE 	DF4DE           
-F4E2 	DF4E2           F4E4 	DF4E4           F4E5 	DF4E5           
-F4E6 	DF4E6           F4E7 	DF4E7           F4E8 	DF4E8           
-F4E9 	DF4E9           F4EA 	DF4EA           F4EB 	DF4EB           
-F4F0 	DF4F0           F4F7 	DF4F7           F4F9 	DF4F9           
-F4FB 	DF4FB           F506 	DF506           F508 	DF508           
-F50A 	DF50A           F50E 	DF50E           F50F 	DF50F           
-F510 	DF510           F511 	DF511           F513 	DF513           
-F515 	DF515           F517 	DF517           F518 	DF518           
-F51A 	DF51A           F51B 	DF51B           F51C 	DF51C           
-F51D 	DF51D           F51E 	DF51E           0041 	DFDC            
-FF80 	DFF80           FF82 	DFF82           FF84 	DFF84           
-FF86 	DFF86           FF88 	DFF88           FF8A 	DFF8A           
-FFD0 	DFFD0           F91F 	DIRBF           F501 	DMA             
+F4C2 	DF4C2           F4C3 	DF4C3           F4CA 	DF4CA           
+F4CD 	DF4CD           F4CE 	DF4CE           F4CF 	DF4CF           
+F4D0 	DF4D0           F4D1 	DF4D1           F4D2 	DF4D2           
+F4D3 	DF4D3           F4D4 	DF4D4           F4D5 	DF4D5           
+F4D8 	DF4D8           F4DA 	DF4DA           F4DC 	DF4DC           
+F4DE 	DF4DE           F4E2 	DF4E2           F4E4 	DF4E4           
+F4E5 	DF4E5           F4E6 	DF4E6           F4E7 	DF4E7           
+F4E8 	DF4E8           F4E9 	DF4E9           F4EA 	DF4EA           
+F4EB 	DF4EB           F4F0 	DF4F0           F4F7 	DF4F7           
+F4F8 	DF4F8           F4F9 	DF4F9           F4FB 	DF4FB           
+F506 	DF506           F508 	DF508           F50A 	DF50A           
+F50E 	DF50E           F50F 	DF50F           F510 	DF510           
+F511 	DF511           F513 	DF513           F515 	DF515           
+F517 	DF517           F518 	DF518           F51A 	DF51A           
+F51B 	DF51B           F51C 	DF51C           F51D 	DF51D           
+F51E 	DF51E           0041 	DFDC            FF80 	DFF80           
+FF82 	DFF82           FF84 	DFF84           FF86 	DFF86           
+FF88 	DFF88           FF8A 	DFF8A           FFD0 	DFFD0           
+F91F 	DIRBF           F2DD 	DISCTX          F501 	DMA             
 E6C6 	DPB0            E6D7 	DPB1            E6F3 	DPB2            
 E70F 	DPB3            E72B 	DPB4            E747 	DPB5            
 E763 	DPB6            F503 	DPH             E654 	DPH0            
@@ -2421,15 +2415,15 @@ F22C 	LF22C           F230 	LF230           F233 	LF233
 F236 	LF236           F247 	LF247           F24B 	LF24B           
 F24F 	LF24F           F260 	LF260           F285 	LF285           
 F2A7 	LF2A7           F2A9 	LF2A9           F2B4 	LF2B4           
-F2BD 	LF2BD           F2C9 	LF2C9           F2DD 	LF2DD           
-F303 	LF303           F307 	LF307           F318 	LF318           
-F31F 	LF31F           F323 	LF323           F34B 	LF34B           
-F35D 	LF35D           F361 	LF361           F366 	LF366           
-F376 	LF376           F386 	LF386           F38F 	LF38F           
-F394 	LF394           F3AC 	LF3AC           F3B1 	LF3B1           
-F3C6 	LF3C6           F3CE 	LF3CE           F3E0 	LF3E0           
-F3F1 	LF3F1           F3FF 	LF3FF           F40E 	LF40E           
-EA92 	LIST            ED85 	LISTST          EF66 	LOAD            
+F2BD 	LF2BD           F2C9 	LF2C9           F303 	LF303           
+F307 	LF307           F318 	LF318           F31F 	LF31F           
+F34B 	LF34B           F35D 	LF35D           F361 	LF361           
+F366 	LF366           F376 	LF376           F386 	LF386           
+F38F 	LF38F           F394 	LF394           F3AC 	LF3AC           
+F3B1 	LF3B1           F3C6 	LF3C6           F3CE 	LF3CE           
+F3E0 	LF3E0           F3F1 	LF3F1           F3FF 	LF3FF           
+F40E 	LF40E           EA92 	LIST            ED85 	LISTST          
+EF66 	LOAD            F26F 	MODE0           F275 	MODE1           
 E643 	NDISK           EA1A 	OUTTXT          0000 	P00             
 0001 	P01             0002 	P02             0003 	P03             
 0004 	P04             0005 	P05             0006 	P06             
@@ -2450,3 +2444,4 @@ EDCA 	WRITE
 
 
 No Fatal error(s)
+   

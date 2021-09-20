@@ -1,6 +1,6 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC 1     Version vom 19.09.2021  *
+; *  HRCPM12-BIOS fuer den AC 1     Version vom 20.09.2021  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -259,7 +259,7 @@ TEXT1:  DEFB 0CH
 BOOT:   DI
         LD   SP,0F4C1H
         XOR  A
-        LD   (LATPU),A
+        LD   (LATPU),A    ;FDC-Latch zuruecksetzen
         LD   A,82H
         LD   (DF4CD),A
         LD   A,20H
@@ -1577,8 +1577,8 @@ LF18D:  ADD  HL,HL
         RRCA
         LD   A,51H
         ADC  A,A
-        LD   (DF26F),A
-        LD   (DF275),A
+        LD   (MODE0),A    ;A2 --> INI
+        LD   (MODE1),A    ;A3 --> OUTI
         DI
         CALL LF227
         POP  HL
@@ -1684,25 +1684,27 @@ LF260:  POP  HL
 ;       ----------------------
 ;
 RW:     LD   A,(LATPU)
-        SET  1,A          ;Aufheben Reset
-        OUT  (LATCH),A    ;des WAIT Monofl.
+        SET  1,A
+        OUT  (LATCH),A    ;WAIT-Freigabe
 RW01:   IN   A,(CFDC)     ;Lese Hauptstatusregister
         RLCA
         JR   NC,RW01      ;FDC noch nicht bereit
-        INI
+        DEFB 0EDH         ;ED A2 = INI
+MODE0:  DEFB 0A2H         ;ED A3 = OUTI
         NOP
 RW02:   OUT  (WAIT),A     ;WAIT bis Interrupt FDC
         NOP
-        INI
+        DEFB 0EDH         ;ED A2 = INI
+MODE1:  DEFB 0A2H         ;ED A3 = OUTI
         JP   NZ,RW02
         DEC  D
         JP   NZ,RW02
         LD   A,(LATPU)
         SET  4,A          ;Terminal Count
-        OUT  (LATCH),A
+        OUT  (LATCH),A    ;TC + WAIT-Sperrung
         RET
 ;
-LF285:  LD   HL,0F4F8H
+LF285:  LD   HL,DF4F8
         LD   A,(DF4E4)
         AND  03H
         CP   (HL)
@@ -1718,7 +1720,7 @@ LF285:  LD   HL,0F4F8H
         JR   Z,LF2A7
         CP   02H
         JR   Z,LF2A7
-        SET  3,(HL)
+        SET  3,(HL)       ;Floppy-LW 1: Motor an
         JR   LF2A9
 ;
 LF2A7:  SET  0,(HL)       ;Floppy-LW 0: Motor an
@@ -1739,7 +1741,7 @@ LF2BD:  LD   A,(HL)
         AND  A
         JR   NZ,LF2C9
         PUSH HL
-        LD   HL,0F2DDH
+        LD   HL,DISCTX
         CALL OUTTXT
         POP  HL
 LF2C9:  PUSH BC
@@ -1753,19 +1755,11 @@ LF2C9:  PUSH BC
         JR   Z,LF2BD
         LD   (HL),90H
         RET
-;Ansprung unklar
-LF2DD:  JR   NZ,LF323
-        LD   C,C
-        LD   D,E
-        LD   B,E
-        CCF
-        EX   AF,AF'
-        EX   AF,AF'
-        EX   AF,AF'
-        EX   AF,AF'
-        EX   AF,AF'
-        EX   AF,AF'
+;
+DISCTX: DEFM ' DISC?'
+        DEFB 8,8,8,8,8,8
         NOP
+;
         PUSH AF
         LD   A,(DF4F9)
         AND  A
@@ -1802,7 +1796,7 @@ LF31F:  ADD  HL,BC
         DEC  A
         LD   D,A
         LD   E,L
-LF323:  LD   L,11H
+        LD   L,11H
         CALL LF002
         OR   D
         OUT  (P8E),A
@@ -2007,7 +2001,7 @@ CTAB:   NOP               ;FDC Befehlsbyte
         NOP
         NOP
 DF4F7:  NOP
-        NOP
+DF4F8:  NOP
 DF4F9:  NOP
 LATPU:  NOP
 DF4FB:  DEFB 4
@@ -2093,8 +2087,6 @@ D181F   EQU  181FH
 D185B   EQU  185BH
 D185D   EQU  185DH
 DEEDA   EQU  0EEDAH
-DF26F   EQU  0F26FH
-DF275   EQU  0F275H
 DF4C2   EQU  0F4C2H
 DF4CE   EQU  0F4CEH
 DF4CF   EQU  0F4CFH
