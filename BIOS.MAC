@@ -1,6 +1,6 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC 1     Version vom 20.09.2021  *
+; *  HRCPM12-BIOS fuer den AC 1     Version vom 02.04.2022  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -17,6 +17,37 @@
 ;
         .PHASE 0E600H
 ;
+OUTHEX  EQU  07EEH
+OUTHL   EQU  07F1H
+RSA     EQU  01A5H        ; CPU-Register nach RSA - nicht MO11 !
+REGIST  EQU  05CEH        ; Registeranzeige - nicht MO11!
+KLOAD   EQU  0B32H        ; Load From Kassette - Nicht MO11!!
+;
+;
+CUPOS   EQU  1800H
+BREAK   EQU  1818H        ; NMI Sprungziel
+CBWSB   EQU  181FH        ; Das Testergebnis steht auf der Adresse 181Fh: 
+;                         ; 0 = kein Color-BWS, sonst der eingestellte Farbwert.
+ARG1    EQU  185BH
+ARG2    EQU  185DH
+;
+;
+WARMBT  EQU  0000H        ; WBOOT der Grundseite.
+BDOSF   EQU  0005H        ; BDOS-Aufruf + TPA-MAX
+RST38   EQU  0038H        ; CP/M-Break
+NMI     EQU  0066H
+;
+;
+IOBYTE  EQU  0003H
+LWBYTE  EQU  0004H        ; LW+USER Nr.
+;
+ZEIPUF  EQU  0FFD0H       ; 1 + 32 Byte Puffer f. ?Tastatur
+;
+;
+BDOS    EQU  0D806H       ; BDOS-EinsprungAdresse
+WBOOTB  EQU  0E603H       ; BIOS-Eisprung WBOOT
+;
+;
 HPRDSK  EQU  0B000H       ;Hilfsprogramm: Format RAM-Disk
 EQUCCP  EQU  0D000H       ;Start CCP
 ;
@@ -28,6 +59,8 @@ CFDC    EQU  40H          ;Hauptstatusregister FDC
 DFDC    EQU  41H          ;Datenport FDC
 WAIT    EQU  43H          ;IO-Adr. /WAIT Monoflop
 LATCH   EQU  45H          ;IO-Adr. Latch 74LS175
+;
+;============================================================================
 ;
         JP   BOOT
         JP   WBOOT
@@ -140,7 +173,7 @@ DPB0:   DEFW 128          ;128 Sectoren/Track (Rec/Trk) = 16k/Trk
         DEFW 63           ;64 DIR - Eintaege
         DEFW 080H         ;1 DIR-Block
         DEFW 0            ;weil nichtwechselbares Medium
-        DEFW 1            ;16 Kbyte System
+        DEFW 1            ;16 Kbyte System / Track-Offset
 ;
         DEFW LF019        ;???
 ;
@@ -238,7 +271,7 @@ DPB6:   DEFW 80           ;80 Sectoren/Track
         DEFB 50H,1,43H,0FFH
         DEFB 0E1H,33H,0FFH
 ;
-TEXT1:  DEFB 0CH
+TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA"
         DEFM "24.08.86 FA-MODE "
         DEFM "ConIn INT"
@@ -247,39 +280,42 @@ TEXT1:  DEFB 0CH
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:16MB,"
         DEFM "  D0: 16MB  E0: 16MB"
-		DEFB 0DH,0AH
+        DEFB 0DH,0AH
         DEFM "FDC (45H) B0:5*1024"
         DEFM " F0:16*256 G1:5*1024"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "RFL Praeci.Port E0H"
         DEFM " A: 1024k -->"
         DEFM "Format A:(J)?"
-		DEFB 0
+        DEFB 0
+;
+;******************************   BOOT   *******************************
 ;
 BOOT:   DI
-        LD   SP,0F4C1H
+        LD   SP,CPMSTK
         XOR  A
         LD   (LATPU),A    ;FDC-Latch zuruecksetzen
-        LD   A,82H
-        LD   (DF4CD),A
-        LD   A,20H
-        LD   (DF4CE),A
-        CALL LED50
+        LD   A,82H        ; Cursor EIN ?
+        LD   (CUFLAG),A
+        LD   A,20H        ; alternierendes Cursor-Zeichen
+        LD   (CUALT),A
+        CALL BWSINI
         IN   A,(P05)
-        RES  3,A
+        RES  3,A           ; BildInvers (PIO1B) Bit3 aus
         OUT  (P05),A
-        LD   HL,(D1818)
-        LD   (DF4DE),HL
-        LD   HL,0E603H
-        LD   (D1818),HL
-        CALL LE957
+        LD   HL,(BREAK)    ; Sprungtabelle NMI MONOTOR
+        LD   (OLDNMI),HL   ; sichern
+        LD   HL,WBOOTB     ; CP/M-Warmstart-Einsprungadresse
+        LD   (BREAK),HL
+        CALL CPMMOD
         XOR  A
         LD   (DF51A),A
-        LD   (D0003),A
-        LD   (D0004),A
-        LD   (DFFD0),A
-        CALL LE92D
-        LD   A,03H
+        LD   (IOBYTE),A
+        LD   (LWBYTE),A
+        LD   (ZEIPUF),A
+        CALL BOOT1
+;
+        LD   A,03H         ; CTC init + INT-Mode 2
         OUT  (P00),A
         OUT  (P01),A
         OUT  (P02),A
@@ -302,14 +338,16 @@ BOOT:   DI
         OUT  (P03),A
         XOR  A
         OUT  (P03),A
+;
         LD   HL,0E9B2H
         LD   (DFF88),HL
         LD   HL,0EA05H
         LD   (DFF8A),HL
         LD   BC,0506H
-        LD   HL,0EA13H
-        OTIR
-        LD   HL,TEXT1
+        LD   HL,PIO1TAB
+        OTIR               ; PIO1 PA Init
+;
+        LD   HL,TXT01      ; Begruessungstext
         CALL OUTTXT
         EI
         CALL CONIN
@@ -318,32 +356,36 @@ BOOT:   DI
         CALL Z,RDFORM
         JR   WBOOT1
 ;
-WBOOT:  LD   SP,0F4C1H
-        CALL LE957
+;*******************************   WBOOT   *****************************
+;
+WBOOT:  LD   SP,CPMSTK
+        CALL CPMMOD
         LD   A,(DF51B)
         OR   A
         CALL NZ,LF0CE
-        LD   B,2CH
+        LD   B,2CH        ;44 Records CCP+BDOS
         LD   HL,READ
-        LD   (DEEDA),HL
-        CALL WRCCP
+        LD   (WRCCP2),HL
+        CALL WRCCP        ; wirklich READCCP !
         LD   HL,WRITE
-        LD   (DEEDA),HL
-WBOOT1: CALL LE92D
+        LD   (WRCCP2),HL
+;
+WBOOT1: CALL BOOT1
         LD   A,01H
-        LD   (DF4CD),A
-        LD   A,(DF4D5)
-        LD   (DF4D3),A
-        AND  77H
-        LD   (DF4D4),A
-        LD   A,(D0004)
+        LD   (CUFLAG),A
+        LD   A,(COLO2)
+        LD   (COLOR),A     ;Arbeitszelle Farbbyte
+        AND  77H           ;Intensivdarstellung maskieren
+        LD   (COLO1),A     ;Arbeitszelle "Normaldarstellung"
+        LD   A,(LWBYTE)
         AND  1FH
         LD   C,A
         CALL SELDSK
         LD   HL,(CCP)
-        JP   (HL)         ;JP CCP
+        JP   (HL)         ; JP CCP
 ;
-LE913:  PUSH AF
+;
+CPMERR: PUSH AF           ; CP/M-Fehler - zurueck z. MONITOR
         PUSH HL
         CALL LE990
         RST  18H
@@ -351,42 +393,46 @@ LE913:  PUSH AF
         DEFB 4DH+80H      ;"M+80H
         POP  HL
         POP  AF
-        CALL L01A5
+        CALL RSA
         POP  HL
         DEC  HL
-        CALL L07F1
+        CALL OUTHL
         RST  18H
         DEFB 0DH+80H
-        CALL L05CE
-        RST  38H
-LE92D:  LD   A,0C3H
-        LD   (D0000),A
-        LD   (D0005),A
-        LD   (D0038),A
-        LD   (D0066),A
-        LD   HL,0E603H
-        LD   (D0001),HL
-        LD   (D0067),HL
-        LD   HL,0D806H
-        LD   (D0006),HL
-        LD   HL,0E913H
-        LD   (D0039),HL
+        CALL REGIST       ; MONI - Registeranzeige - nicht MO11 !!!
+        RST  38H          ; zurueck zum MONI
+;
+;
+BOOT1:  LD   A,0C3H        ; CP/M "Grundseite" INIT
+        LD   (WARMBT),A
+        LD   (BDOSF),A
+        LD   (RST38),A
+        LD   (NMI),A
+        LD   HL,WBOOTB
+        LD   (WARMBT+1),HL
+        LD   (NMI+1),HL
+        LD   HL,BDOS
+        LD   (BDOSF+1),HL
+        LD   HL,CPMERR
+        LD   (RST38+1),HL
         LD   HL,0080H
         LD   (DMA),HL
         RET
 ;
-LE957:  PUSH AF
-        LD   A,01H
-        JR   LE95E
+;+++++++++++++++++++++++++++++++++   Ende BOOT / WBOOT   +++++++++++++++++
 ;
-LE95C:  PUSH AF
+CPMMOD: PUSH AF           ; CP/M EIN
+        LD   A,01H
+        JR   MOD1
+;
+AC1MOD: PUSH AF           ; CP/M AUS (AC1-Mode)
         XOR  A
-LE95E:  OUT  (P1E),A
+MOD1:   OUT  (P1E),A
         POP  AF
         RET
 ;
-LE962:  LD   BC,0FFFFH
-LE965:  LD   A,(DE)
+CHKSU:  LD   BC,0FFFFH     ; Pruefsumme berechnen
+CHKS1:  LD   A,(DE)
         XOR  B
         LD   B,A
         RRCA
@@ -418,28 +464,30 @@ LE965:  LD   A,(DE)
         DEC  HL
         LD   A,H
         OR   L
-        JR   NZ,LE965
+        JR   NZ,CHKS1
         RET
 ;
-EXIT:   LD   HL,0000H
+EXIT:   LD   HL,0000H      ; RuecksprungAdresse f. RET
         PUSH HL
-LE990:  LD   A,00H
+LE990:  LD   A,00H         ; AC1-Mode
         OUT  (P1E),A
         XOR  A
-        OUT  (P11),A
-        LD   HL,(DF4DE)
-        LD   (D1818),HL
+        OUT  (P11),A       ; ? IOSEL4
+        LD   HL,(OLDNMI)
+        LD   (BREAK),HL    ; alten NMI wiederherstellen
         LD   A,03H
-        OUT  (P00),A
+        OUT  (P00),A       ; INIT CTC
         OUT  (P01),A
         OUT  (P02),A
         OUT  (P03),A
-        OUT  (P06),A
+        OUT  (P06),A       ; INIT PIO1 Port A (Tastatur) ohne INTERRUPT
         LD   A,0CFH
         OUT  (P06),A
         LD   A,0FFH
         OUT  (P06),A
-        RET
+        RET                ; zurueck zum MONITOR, normal
+;
+;
 ;Ansprung unklar
 LE9B2:  DI
         PUSH AF
@@ -492,506 +540,546 @@ LE9FF:  POP  HL
         POP  AF
         EI
         RETI
-;Ansprung unklar
+;
+;Ansprung unklar      INIT PIO1 Port A fuer Interruptbetrieb
+;
 LEA05:  DI
         PUSH AF
         PUSH BC
         PUSH HL
-        LD   HL,0EA13H
-        LD   BC,0506H
+        LD   HL,PIO1TAB
+        LD   BC,0506H      ; 5 Bytes f. PIO1 A Control
         OTIR
         JR   LE9FF
 ;Ansprung unklar
-LEA13:  ADC  A,B
-        RST  08H
-        RST  38H
-        OR   A
-        LD   A,A
+PIO1TAB:  DEFB 88H,0CFH,0FFH,0B7H,7FH   ; Tabelle PIO1 Port A
+;
         ADC  A,D
         ADD  A,A
+;
+;
 OUTTXT: PUSH BC
         PUSH AF
-LEA1C:  LD   C,(HL)
+TEXT1:  LD   C,(HL)
         LD   A,C
         OR   A
-        JR   Z,LEA27
+        JR   Z,TEXT2
         CALL CONOUT
         INC  HL
-        JR   LEA1C
-;
-LEA27:  POP  AF
+        JR   TEXT1
+TEXT2:  POP  AF
         POP  BC
         RET
+;
 ;Ansprung unklar
 LEA2A:  XOR  A
         RET
 ;
-CONST:  LD   A,(DFFD0)
+;************************   CONST   *************************
+;
+CONST:  LD   A,(ZEIPUF)
         OR   A
         RET  Z
         LD   A,0FFH
         RET
 ;
+;***************************   CONIN   ***********************
+;
 CONIN:  DI
-        LD   (DF4D8),SP
-        LD   SP,0F442H
+        LD   (SPCIN),SP
+        LD   SP,CINSP
         PUSH BC
         PUSH DE
         PUSH HL
-LEA3F:  XOR  A
+CON10:  XOR  A
         DI
-        LD   HL,(DFFD0)
+        LD   HL,(ZEIPUF)
         OR   L
-        JR   NZ,LEA60
+        JR   NZ,CON12
         EI
-        DJNZ LEA3F
+        DJNZ CON10
         DI
-        OUT  (P1E),A
-        LD   HL,(D1800)
+        OUT  (P1E),A         ; AC1 Mode
+        LD   HL,(CUPOS)
         INC  C
         BIT  6,C
-        LD   A,(DF4CE)
-        JR   Z,LEA5A
+        LD   A,(CUALT)
+        JR   Z,CON11
         LD   A,0FH
-LEA5A:  LD   (HL),A
-        CALL LE957
-        JR   LEA3F
-;
-LEA60:  DEC  A
-        LD   (DFFD0),A
+CON11:  LD   (HL),A
+        CALL CPMMOD           ; CP/M Mode
+        JR   CON10
+CON12:  DEC  A
+        LD   (ZEIPUF),A
         LD   A,H
         LD   HL,0FFD2H
         LD   DE,0FFD1H
         LD   BC,001FH
         LDIR
-        CALL LEA7C
+        CALL CON20
         POP  HL
         POP  DE
         POP  BC
-        LD   SP,(DF4D8)
+        LD   SP,(SPCIN)
         EI
         RET
 ;
-LEA7C:  CP   41H
+CON20:  CP   41H
         RET  C
         RET  NC
         CP   5FH
-        JR   Z,LEA8F
+        JR   Z,CON21
         RET
 ;Ansprung unklar
 LEA85:  CP   5EH
-        JR   C,LEA8F
+        JR   C,CON21
         CP   61H
         RET  C
         CP   7EH
         RET  NC
-LEA8F:  XOR  20H
+CON21:  XOR  20H
         RET
+;
+;********************   LIST   PUNCH   (READER)   ***********
 ;
 LIST:   RET
 ;
 PUNCH:  RET
 ;
+;******************************* CONOUT  *********************
+;
+;       ; Ausgabe eines Zeichens  ,   IN: Zeichen in C
+;
 CONOUT: DI
-        LD   (DF4DA),SP
-        LD   SP,0F468H
+        LD   (SPCOUT),SP     ; Stack bei MON-Aufruf retten
+        LD   SP,COUTSP
         PUSH AF
         PUSH BC
         PUSH DE
         PUSH HL
-        CALL LE95C
+        CALL AC1MOD
         PUSH HL
-        LD   HL,(D1800)
-        LD   A,(DF4D2)
-        LD   (HL),A
-        LD   A,(DF4CF)
+        LD   HL,(CUPOS)      ;Cursorposition
+        LD   A,(CHAR)
+        LD   (HL),A          ;altes Zeichen auf Position
+        LD   A,(STZ00)       ;Durchlauf bei Steuerzeichen?
         AND  A
-        JP   NZ,LECBE
-        LD   A,C
-        CP   20H
-        JR   C,LEADE
-        CP   7FH
-        JR   NC,LEADE
-        LD   HL,(D1800)
-        JP   LEC22
+        JP   NZ,KONV10       ;NZ= Steuerzeichen 2. oder 3. Durchlauf
+        LD   A,C             ;Byte
+        CP   20H             ;kleinstes Zeichen
+        JR   C,KONVTB
+        CP   7FH             ;groesstes Zeichen
+        JR   NC,KONVTB
+        LD   HL,(CUPOS)
+        JP   CCHAR          ;Ausgabe einzelnes Zeichen
 ;
-LEAC1:  LD   HL,(D1800)
+KONVT9: LD   HL,(CUPOS)
         LD   A,(HL)
-        LD   (DF4D2),A
-        LD   A,(DF4CD)
+        LD   (CHAR),A
+        LD   A,(CUFLAG)
         CP   01H
         JR   NZ,LEAD1
         LD   (HL),0FH
-LEAD1:  CALL LE957
+LEAD1:  CALL CPMMOD
         POP  HL
         POP  DE
         POP  BC
         POP  AF
-        LD   SP,(DF4DA)
+        LD   SP,(SPCOUT)
         EI
         RET
 ;
-LEADE:  CP   1BH
-        JR   NZ,LEAE9
-        LD   A,02H
-        LD   (DF4CF),A
-        JR   LEAC1
+;       ; Verzweigung bei Steuerzeichen
+;       ; INPUT:  A=Zeichen
 ;
-LEAE9:  LD   HL,(D1800)
-        CP   01H
-        JR   Z,LEB50
-        CP   08H
-        JP   Z,LEB78
-        CP   0AH
-        JP   Z,LEB7C
-        CP   0CH
-        JR   Z,LEB59
-        CP   0DH
-        JP   Z,LEB94
-        CP   14H
-        JP   Z,LEB9B
-        CP   15H
-        JP   Z,LEBBE
-        CP   16H
-        JP   Z,LEBC2
-        CP   18H
-        JP   Z,LEBE9
-        CP   1AH
-        JP   Z,LEC12
-        LD   B,A
-        LD   A,(DF4D3)
-        AND  A
-        JP   Z,LEAC1
+KONVTB: CP   1BH            ; ESC ?
+        JR   NZ,KONVT1
+        LD   A,02H          ;wenn ja
+        LD   (STZ00),A      ;Zeiger auf 2
+        JR   KONVT9         ;nichts ausgeben
+;
+KONVT1: LD   HL,(CUPOS)
+        CP   01H            ;Cursor home
+        JR   Z,CHOME
+        CP   08H            ;Cursor links
+        JP   Z,CLEFT
+        CP   0AH            ;Zeilenvorschub
+        JP   Z,CLF
+        CP   0CH            ; CLS
+        JR   Z,BCLS
+        CP   0DH            ;Wagenruecklauf
+        JP   Z,CCRET
+        CP   14H            ;BS ab Cursor loeschen
+        JP   Z,CBLOE
+        CP   15H            ;Cursor nach rechts
+        JP   Z,CRIGH
+        CP   16H            ;Zeile ab Cursor loeschen
+        JP   Z,CZLOE
+        CP   18H            ;Zeile ab Cursor loeschen + CR
+        JP   Z,CZLCR
+        CP   1AH            ;Cursor hoch
+        JP   Z,CHOCH
+        LD   B,A            ;Zeichen merken
+        LD   A,(COLOR)
+        AND  A              ;Test auf Color-BWS
+        JP   Z,KONVT9       ;Z = monochrom
         LD   A,B
         CP   02H
-        JP   Z,LECAF
+        JP   Z,CUON
         CP   82H
-        JP   Z,LECAF
+        JP   Z,CUON
         CP   03H
-        JP   Z,LECB7
+        JP   Z,CUOFF
         CP   83H
-        JP   Z,LECB7
-        CP   84H
-        JP   Z,LEC74
-        CP   85H
-        JP   Z,LEC82
-        CP   86H
-        JP   Z,LEC91
-        CP   87H
-        JP   Z,LEC9E
-        JP   LEAC1
+        JP   Z,CUOFF
+        CP   84H            ;normale Darstellung
+        JP   Z,BNORM
+        CP   85H            ;invers
+        JP   Z,BINVN
+        CP   86H            ;intensiv - HihgLight
+        JP   Z,BINTE
+        CP   87H            ;intensiv + invers
+        JP   Z,BIVIN
+        JP   KONVT9
 ;
-LEB50:  LD   HL,17FFH
-        LD   (D1800),HL
-        JP   LEAC1
+CHOME:  LD   HL,17FFH
+        LD   (CUPOS),HL
+        JP   KONVT9
 ;
-LEB59:  LD   A,20H
-        CALL LEB85
-        LD   (D1800),HL
-        LD   A,(DF4D3)
-        AND  77H
-        JP   Z,LEAC1
-        CALL LED41
-        LD   A,(DF4D3)
-        CALL LEB85
-        CALL LED47
-        JP   LEAC1
+BCLS:   LD   A,20H          ;0Ch    Bildschirm loeschen
+        CALL BCL1           ;Loeschroutine
+        LD   (CUPOS),HL     ;Cursorposition
+        LD   A,(COLOR)      ;Farbbyte
+        AND  77H            ;Farb-BWS vorhanden?
+        JP   Z,KONVT9       ;Z = nein, dann Ende
+        CALL BWSCOL         ;Farbspeicher ein
+        LD   A,(COLOR)
+        CALL BCL1
+        CALL BWSZEI         ;Farbspeicher aus
+        JP   KONVT9
 ;
-LEB78:  INC  HL
-        JP   LEC16
+CLEFT:  INC  HL             ;08h     Cursor links
+        JP   CHOLI
 ;
-LEB7C:  LD   DE,0040H
+CLF:    LD   DE,0040H       ;0Ah     Zeilenvorschub
         AND  A
         SBC  HL,DE
-        JP   LEC33
+        JP   SCROL
 ;
-LEB85:  LD   HL,1000H
+BCL1:   LD   HL,1000H       ;Anfang BWS
         LD   (HL),A
         LD   D,H
         LD   E,L
         INC  E
         PUSH BC
-        LD   BC,07FFH
+        LD   BC,07FFH       ;Laenge BWS
         LDIR
         POP  BC
         RET
 ;
-LEB94:  LD   A,L
+CCRET:  LD   A,L            ;0Dh     Wagenruecklauf
         OR   3FH
         LD   L,A
-        JP   LEC33
+        JP   SCROL
 ;
-LEB9B:  PUSH HL
-        LD   A,0FH
-LEB9E:  LD   (HL),20H
+CBLOE:  PUSH HL
+        LD   A,0FH          ;14h     BS ab Cursor loeschen
+CBLO1:  LD   (HL),20H
         DEC  HL
         CP   H
-        JR   NZ,LEB9E
+        JR   NZ,CBLO1
         POP  HL
-        LD   A,(DF4D3)
+        LD   A,(COLOR)
         LD   B,A
         AND  77H
-        JP   Z,LEAC1
-        CALL LED41
+        JP   Z,KONVT9
+        CALL BWSCOL          ;Farbspeicher ein
         LD   A,0FH
-LEBB3:  LD   (HL),B
+CBLO2:  LD   (HL),B
         DEC  HL
         CP   H
-        JR   NZ,LEBB3
-        CALL LED47
-        JP   LEAC1
+        JR   NZ,CBLO2
+        CALL BWSZEI          ;Farbspeicher aus
+        JP   KONVT9
 ;
-LEBBE:  DEC  HL
-        JP   LEC33
+CRIGH:  DEC  HL              ;15h     Cursor nach rechts
+        JP   SCROL
 ;
-LEBC2:  PUSH HL
+CZLOE:  PUSH HL              ;16h   Zeile ab Cursor loeschen
         LD   A,L
         AND  3FH
         LD   B,A
         INC  B
-LEBC8:  LD   (HL),20H
+CZLO1:  LD   (HL),20H
         DEC  HL
-        DJNZ LEBC8
+        DJNZ CZLO1
         POP  HL
-        LD   A,(DF4D3)
+        LD   A,(COLOR)
         LD   C,A
         AND  77H
-        JP   Z,LEAC1
-        CALL LED41
+        JP   Z,KONVT9
+        CALL BWSCOL          ;Farbspeicher ein
         LD   A,L
         AND  3FH
         LD   B,A
         INC  B
-LEBDF:  LD   (HL),C
+CZLO2:  LD   (HL),C
         DEC  HL
-        DJNZ LEBDF
-        CALL LED47
-        JP   LEAC1
+        DJNZ CZLO2
+        CALL BWSZEI          ;Farbspeicher aus
+        JP   KONVT9
 ;
-LEBE9:  PUSH HL
+CZLCR:  PUSH HL              ;18h   Zeile ab Cursor loeschen + CR
         LD   A,L
         OR   3FH
         LD   L,A
-        LD   (D1800),HL
+        LD   (CUPOS),HL
         PUSH HL
-        LD   B,40H
-LEBF4:  LD   (HL),20H
+        LD   B,40H           ;Zeilenlaenge
+CZLC1:  LD   (HL),20H
         DEC  HL
-        DJNZ LEBF4
+        DJNZ CZLC1
         POP  HL
-        LD   A,(DF4D3)
+        LD   A,(COLOR)
         LD   C,A
         AND  77H
-        JP   Z,LEAC1
-        CALL LED41
+        JP   Z,KONVT9
+        CALL BWSCOL          ;Farbspeicher ein
         LD   B,40H
-LEC08:  LD   (HL),C
+CZLC2:  LD   (HL),C
         DEC  HL
-        DJNZ LEC08
-        CALL LED47
-        JP   LEAC1
+        DJNZ CZLC2
+        CALL BWSZEI          ;Farbspeicher aus
+        JP   KONVT9
 ;
-LEC12:  LD   DE,0040H
+CHOCH:  LD   DE,0040H        ;1Ah     Cursor hoch
         ADD  HL,DE
-LEC16:  LD   A,18H
-        CP   H
-        JP   Z,LEAC1
-        LD   (D1800),HL
-        JP   LEAC1
 ;
-LEC22:  LD   (HL),A
-        LD   A,(DF4D3)
+CHOLI:  LD   A,18H           ;Begrenzung Cursor hoch und links
+        CP   H
+        JP   Z,KONVT9
+        LD   (CUPOS),HL
+        JP   KONVT9
+;
+CCHAR:  LD   (HL),A
+        LD   A,(COLOR)
         LD   C,A
         AND  77H
-        JR   Z,LEC32
-        CALL LED41
+        JR   Z,CCHA1
+        CALL BWSCOL
         LD   (HL),C
-        CALL LED47
-LEC32:  DEC  HL
-LEC33:  LD   (D1800),HL
-        EX   DE,HL
+        CALL BWSZEI
+CCHA1:  DEC  HL
+;
+SCROL:  LD   (CUPOS),HL
+        EX   DE,HL             ;Test ob Scrollen noetig
         LD   HL,0FFFH
         AND  A
-        SBC  HL,DE
+        SBC  HL,DE             ;DE = akt. Cursorpos.
         EX   DE,HL
-        JP   C,LEAC1
-        LD   A,20H
-        CALL LEC5D
-        LD   A,(DF4D3)
+        JP   C,KONVT9          ;CY = nicht scrollen
+        LD   A,20H             ;Leerzeichen
+        CALL SCR11             ;Scrollen
+        LD   A,(COLOR)
         AND  77H
-        JP   Z,LEAC1
-        CALL LED41
-        LD   A,(DF4D3)
-        CALL LEC5D
-        CALL LED47
-        JP   LEAC1
+        JP   Z,KONVT9          ;Z = kein Farbspeicher
+        CALL BWSCOL            ;Farbspeicher ein
+        LD   A,(COLOR)         ;Farbbyte
+        CALL SCR11
+        CALL BWSZEI            ;Farbspeicher aus
+        JP   KONVT9
 ;
-LEC5D:  LD   HL,17BFH
+SCR11:  LD   HL,17BFH          ;Umladeroutine Scrollen
         LD   DE,17FFH
         LD   BC,07C0H
         LDDR
         EX   DE,HL
-        LD   (D1800),HL
+        LD   (CUPOS),HL
         INC  HL
-        LD   B,40H
-LEC6F:  DEC  L
-        LD   (HL),A
-        DJNZ LEC6F
+        LD   B,40H             ;eine Zeilenlaenge
+SCR12:  DEC  L
+        LD   (HL),A            ;Leerzeile schreiben
+        DJNZ SCR12
         RET
 ;
-LEC74:  LD   A,(DF4D4)
+BNORM:  LD   A,(COLO1)         ;84h    normale Darstellung
         AND  77H
-        LD   (DF4D3),A
-        LD   (DF4D4),A
-        JP   LEAC1
+        LD   (COLOR),A
+        LD   (COLO1),A
+        JP   KONVT9
 ;
-LEC82:  LD   A,(DF4D4)
+BINVN:  LD   A,(COLO1)         ;85    invers EIN
         AND  77H
         RRCA
         RRCA
         RRCA
         RRCA
-        LD   (DF4D3),A
-        JP   LEAC1
+        LD   (COLOR),A
+        JP   KONVT9
 ;
-LEC91:  LD   A,(DF4D4)
-        AND  77H
-        OR   08H
-        LD   (DF4D3),A
-        JP   LEAC1
-;
-LEC9E:  LD   A,(DF4D3)
+BINTE:  LD   A,(COLO1)         ;86h    intensiv EIN
         AND  77H
         OR   08H
-        RRCA
-        RRCA
-        RRCA
-        RRCA
-        LD   (DF4D3),A
-        JP   LEAC1
+        LD   (COLOR),A
+        JP   KONVT9
 ;
-LECAF:  LD   A,01H
-        LD   (DF4CD),A
-        JP   LEAC1
+BIVIN:  LD   A,(COLOR)         ;87h    intensiv + invers
+        AND  77H
+        OR   08H
+        RRCA
+        RRCA
+        RRCA
+        RRCA
+        LD   (COLOR),A
+        JP   KONVT9
 ;
-LECB7:  XOR  A
-        LD   (DF4CD),A
-        JP   LEAC1
+CUON:   LD   A,01H              ;82h   Cursor EIN
+        LD   (CUFLAG),A
+        JP   KONVT9
 ;
-LECBE:  LD   A,(DF4CF)
-        CP   02H
-        JR   NZ,LECD1
+CUOFF:  XOR  A                  ;83h  Cursor AUS
+        LD   (CUFLAG),A
+        JP   KONVT9
+;
+; Behandlung ESC-Sequenzen
+;
+; Input: ESC + 2 Steuerzeichen
+; wenn 1. Zeichen > 80h dann Cursorposition
+; sonst Auswertung Farbe / Grafikzeichen
+; (stz00) = Zaehler fuer Zeichenanzahl
+;
+KONV10: LD   A,(STZ00)
+        CP   02H             ;2 = 1. Steuerzeichen (Zeile)
+        JR   NZ,KONV20       ;sonst 3. Durchlauf (Spalte)
         LD   A,C
-        LD   (DF4D0),A
-        LD   A,01H
-        LD   (DF4CF),A
-        JP   LEAC1
+        LD   (STZ01),A       ;erstes Zeichen merken
+        LD   A,01H           ;Zeiger fuer 3. Durchlauf
+        LD   (STZ00),A
+        JP   KONVT9          ;nichts ausgeben
 ;
-LECD1:  LD   A,C
-        LD   (DF4D1),A
+; Verzweigung Cursorposition / weitere Funktionen
+;
+KONV20: LD   A,C
+        LD   (STZ02),A       ;zweites Zeichen merken
         XOR  A
-        LD   (DF4CF),A
-        LD   HL,0F4D0H
+        LD   (STZ00),A       ;Durchlaufzaehler ruecksetzen
+        LD   HL,STZ01
         LD   A,(HL)
-        BIT  7,A
-        JR   Z,LED10
+        BIT  7,A             ;welche Funktion? NZ = Cursor
+        JR   Z,KONV22        ;Z = weitere Funktionen
+
+; Berechnung direkte Cursorposition
+; OUT:    HL = BWS-Adresse
+;
         PUSH AF
         LD   A,C
-        AND  3FH
+        AND  3FH             ;max. Spaltenzahl
         LD   L,A
         POP  AF
-        AND  1FH
+        AND  1FH             ;max. Zeilenzahl
         LD   D,00H
         LD   H,D
         LD   E,A
         LD   B,06H
-LECEF:  SLA  E
+KONV21: SLA  E
         RL   D
-        DJNZ LECEF
+        DJNZ KONV21
         ADD  HL,DE
         EX   DE,HL
-        LD   HL,17FFH
+        LD   HL,17FFH         ;Ende BWS-RAM
         AND  A
         SBC  HL,DE
+;
+; Cursor direkt positionieren
+; IN:    HL = Adresse Cursor
+;
         PUSH HL
-        DEFB 2AH          ;LD HL,XXXX ??
-        NOP
-        JR   LED3C
-;Ansprung unklar
-LED02:  JP   NC,L77F4
+        LD   HL,(CUPOS)	      ;alte Position
+        LD   A,(CHAR)	      ;Zeichen holen
+        LD   (HL),A	      ;auf BS schreiben
         POP  HL
-        LD   (D1800),HL
-        LD   A,(HL)
-        LD   (DF4D2),A
-        JP   LEAC1
+        LD   (CUPOS),HL       ;neue Position setzen
+        LD   A,(HL)           ;neues Zeichen holen
+        LD   (CHAR),A         ;und merken
+        JP   KONVT9
 ;
-LED10:  CP   5FH
-        JR   NZ,LED1C
+; Auswertung weiterer ESC-Funktionen
+; IN:      A = 1. Steuerzeichen
+;
+; Ausgabe Grafikzeichen aus AC1-ZG ( > 80h )
+;
+KONV22: CP   5FH               ;Grafikzeichen?
+        JR   NZ,KONV24         ;NZ = nein
         INC  HL
-        LD   A,(HL)
-        LD   HL,(D1800)
-        JP   LEC22
+        LD   A,(HL)            ;2. Zeichen holen
+        LD   HL,(CUPOS)
+        JP   CCHAR             ;Zeichen ausgeben
 ;
-LED1C:  CP   5DH
-        JP   NZ,LEAC1
-        LD   A,(DF4D3)
+; Einstellen der Farbe (nur Color-BWS)
+;
+KONV24: CP   5DH               ;Farbe?
+        JP   NZ,KONVT9         ;NZ = nein
+        LD   A,(COLOR)         ;Color-BWS?
         AND  A
-        JP   Z,LEAC1
+        JP   Z,KONVT9          ;Z = nein
         INC  HL
-        LD   A,(HL)
-        AND  77H
+        LD   A,(HL)            ;2. Zeichen holen
+        AND  77H               ;intensiv maskieren
         LD   B,A
         RRCA
         RRCA
         RRCA
         RRCA
-        CP   B
-        JP   Z,LEAC1
+        CP   B                 ;Zeichen- und HG-Farbe gleich?
+        JP   Z,KONVT9          ;Z = Ja, dann ignorieren
         LD   A,B
-        LD   (DF4D3),A
-        AND  77H
-        LD   (DF4D4),A
-        JP   LEAC1
+        LD   (COLOR),A         ;Farbe setzen
+        AND  77H               ;intensiv maskieren
+        LD   (COLO1),A         ;Backup
+        JP   KONVT9
 ;
-LED41:  IN   A,(PF0)
-        SET  2,A
-        JR   LED4B
+BWSCOL: IN   A,(PF0)           ; bwsport
+        SET  2,A               ;Farbspeicher ein
+        JR   BWSZ1
 ;
-LED47:  IN   A,(PF0)
-        RES  2,A
-LED4B:  AND  07H
+BWSZEI: IN   A,(PF0)           ; bwsport
+        RES  2,A               ;Farbspeicher aus
+BWSZ1:  AND  07H
         OUT  (PF0),A
         RET
 ;
-LED50:  XOR  A
-        LD   (DF4D5),A
-        LD   A,(D181F)
+BWSINI: XOR  A
+        LD   (COLO2),A
+        LD   A,(CBWSB)       ; Farbmerkzelle, 0= mono
         AND  0FH
-        LD   C,0F0H
+        LD   C,0F0H          ; C-BWS-Port
         IN   B,(C)
         INC  B
-        RET  Z
+        RET  Z               ; Z = kein Color-BWS
         DEC  B
         LD   D,B
-        SET  2,D
+        SET  2,D              ; Farb-RAM-Bit setzen
         LD   HL,1000H
-        LD   E,(HL)
-        OUT  (C),D
+        LD   E,(HL)        ; Zeichen aus unt.-li. Ecke
+        OUT  (C),D         ; Farb-RAM einschalten
         LD   (HL),A
-        CP   (HL)
-        OUT  (C),B
+        CP   (HL)          ; ist Farb-RAM eingebaut?
+        OUT  (C),B         ; Farb-RAM ausschalten
         LD   (HL),E
-        RET  NZ
-        OUT  (C),D
+        RET  NZ            ; Z = Farb-RAM ok
+        OUT  (C),D         ; Farb-RAM einschalten
         PUSH BC
         LD   DE,1001H
         LD   BC,07FFH
-        LDIR
+        LDIR               ; Farb-RAM loeschen
         LD   A,(HL)
         POP  BC
-        OUT  (C),B
-        LD   (DF4D5),A
+        OUT  (C),B         ; Farb-RAM ausschalten
+        LD   (COLO2),A
         RET
+;
+;+++++++++++++++++++++++++++++   Ende CONOUT  ++++++++++++++++
+;
 ;Ansprung unklar
 LED82:  XOR  A
         DEC  A
@@ -1078,52 +1166,52 @@ LEDF1:  LD   C,(HL)
         INC  HL
         INC  HL
         LD   A,(HL)
-        LD   (DF4C2),A
+        LD   (RAFTRK),A
         INC  HL
         LD   A,(HL)
         AND  A
-        JR   NZ,LEE4A
+        JR   NZ,RDERR
         INC  HL
         LD   A,(HL)
-        LD   (DF4C3),A
+        LD   (RAFSEC),A
         BIT  7,A
-        JR   NZ,LEE4A
+        JR   NZ,RDERR
         INC  HL
         LD   A,(HL)
         AND  A
-        JR   NZ,LEE4A
+        JR   NZ,RDERR
         INC  HL
         INC  HL
         LD   A,C
         LD   BC,0080H
         CP   06H
         JR   Z,LEE1D
-        CALL LEEF8
+        CALL ADRRAF
         INIR
         NOP
-        XOR  A
+        XOR  A            ; in Ordnung
         RET
 ;
 LEE1D:  LD   HL,0080H
         LD   DE,(DMA)
-        CALL LE962
-        LD   (DF4CA),BC
-        CALL LEEF8
+        CALL CHKSU
+        LD   (CHKSUM),BC
+        CALL ADRRAF
         OTIR
         NOP
-        CALL LEEF8
+        CALL ADRRAF
         INIR
         NOP
         LD   HL,0080H
         LD   DE,(DMA)
-        CALL LE962
-        LD   HL,(DF4CA)
+        CALL CHKSU
+        LD   HL,(CHKSUM)
         SBC  HL,BC
-        JR   NZ,LEE4A
-        XOR  A
+        JR   NZ,RDERR
+        XOR  A            ; in Ordnung
         RET
 ;
-LEE4A:  LD   A,0FFH
+RDERR:  LD   A,0FFH       ; Fehler
         RET
 ;
 TXTINI: DEFM " =>INIT.."
@@ -1176,7 +1264,7 @@ RDFOR1: CALL HPRDSK       ;Hilfsprogramm Format RAM-Disk
         LD   (DMA),HL
         LD   B,2CH        ;44 Bloecke CCP+BDOS
         CALL WRCCP
-        JP   NZ,LE913
+        JP   NZ,CPMERR
         LD   HL,TEXTOK
         CALL OUTTXT
         RET
@@ -1192,7 +1280,8 @@ WRCCP:  PUSH BC           ;CCP+BDOS in Systemtrack schreiben
 WRCCP1: LD   (SECTOR),DE
         LD   (DMA),HL
         PUSH BC
-        CALL WRITE
+        DEFB 0CDH         ;CALL WRITE -> CD ED CA
+WRCCP2: DEFW 0EDCAH       ; kannn durch     READ (EDC5) ersetzt werden
         POP  BC
         JR   NZ,RDERRO
         LD   HL,(DMA)
@@ -1210,13 +1299,13 @@ RDERRO: LD   HL,RFLERR
         DEC  A
         RET
 ;
-LEEF8:  XOR  A            ;L=RADR 0-7 , H=RADR 8-15 , A=RADR 16-19(21)
+ADRRAF: XOR  A            ;L=RADR 0-7 , H=RADR 8-15 , A=RADR 16-19(21)
         LD   L,A
-        LD   A,(DF4C3)    ;(RAFSEC)
+        LD   A,(RAFSEC)   ;(RAFSEC)
         LD   H,A          ;H=Record (max. 128 = Bit 0-6)
         RR   H
         RR   L            ;H0 -> L7 ...... H6 -> H5
-        LD   A,(DF4C2)    ;(RAFTRK) , A=Track (max. 64 bei 1M (256 bei 4M) = Bit 0-5(7)
+        LD   A,(RAFTRK)    ;(RAFTRK) , A=Track (max. 64 bei 1M (256 bei 4M) = Bit 0-5(7)
         RR   A            ;A0 -> CY
         JR   NC,LEF0B
         SET  6,H          ;H6 = A0 (RADR14)
@@ -1239,64 +1328,43 @@ LEF11:  PUSH AF
         LD   B,80H
         LD   HL,(DMA)
         RET
-;Ansprung unklar
-LEF2C:  JR   NZ,LEF7D
-        LD   C,E
-        JR   NZ,LEF85
-        LD   D,B
-        LD   B,C
-        JR   NZ,LEFAB
-        LD   L,A
-        LD   L,(HL)
-        JR   NZ,LEF6B
-        JR   NC,LEF6B
-        JR   NC,LEF85
-        JR   NZ,LEFAD
-        LD   H,C
-        LD   H,E
-        LD   L,B
-        JR   NZ,LEF74
-        LD   SP,3030H
-        LD   C,B
-        JR   NZ,LEFBF
-        LD   L,L
-        LD   H,A
-        LD   H,L
-        LD   L,H
-        LD   H,C
-        LD   H,H
-        LD   H,L
-        LD   L,(HL)
-        LD   HL,2100H
-        NOP
-        JR   NZ,LEF69
-        NOP
-        LD   BC,0001H
-        OR   B
+;
+;-------------------  ist evtl. altes Fragment von LOAD ---------
+;
+TRTXT:  DEFM " OK TPA von 2000H nach "
+        DEFM "0100H umgeladen!"
+        DEFB 0
+        
+        LD   HL,2000H     ; Quelle
+        LD   DE,0100H     ; ZielAdresse
+        LD   BC,0B000H    ; Laenge (maximum)
         LDIR
-        LD   HL,0EF2CH
+;
+        LD   HL,TRTXT
         CALL OUTTXT
         RET
 ;
+;*************************  LOAD (Turbo)  ********************
+;
 LOAD:   DI
-        LD   (DF4DC),SP
-LEF6B:  LD   SP,0F498H
+        LD   (SPLOAD),SP
+LEF6B:  LD   SP,LOADSP
         PUSH AF
         PUSH BC
         PUSH DE
         PUSH HL
         XOR  A
-        OUT  (P1E),A
+        OUT  (P1E),A        ; AC1-Mode
         LD   DE,0FFFH
         RST  18H
-        DEFB 0DH+80H
+        DEFB 0DH+80H        ; CR ausgeben
         LD   A,20H
-        LD   (DF4CE),A
-        LD   HL,2000H
-        LD   (D185B),HL
-LEF85:  CALL L0B32
-        LD   DE,(D185B)
-        LD   HL,(D185D)
+        LD   (CUALT),A
+        LD   HL,2000H       ; Lade-Ziel-Adresse
+        LD   (ARG1),HL      ; nach Arg1
+        CALL KLOAD          ; Load From Kassette - Nicht MO11!!
+        LD   DE,(ARG1)      ; Anfang
+        LD   HL,(ARG2)      ; Ende
         PUSH DE
         AND  A
         SBC  HL,DE
@@ -1319,47 +1387,49 @@ LEFA2:  DEC  H
         DEFM "Anzahl 100H Bloe"
         DEFM "cke:"
         DEFB 20H+80H      ;" +80H
-        CALL LE957
+        CALL CPMMOD
         LD   A,H
-        CALL LEFD9
+        CALL BCDKO
         LD   A,L
-        CALL LEFD9
+        CALL BCDKO
         POP  BC
-        LD   DE,0100H
-        POP  HL
-        LDIR
+        LD   DE,0100H     ; ZielAdresse
+        POP  HL           ; verschieben von #2000
+        LDIR              ; nach #0100 f. CP/M
         POP  HL
         POP  DE
         POP  BC
         POP  AF
-        LD   SP,(DF4DC)
+        LD   SP,(SPLOAD)
         EI
         RET
 ;
-LEFD9:  PUSH AF
+BCDKO:  PUSH AF
         RRA
         RRA
         RRA
         RRA
-        CALL LEFE2
+        CALL BCDK1
         POP  AF
-LEFE2:  AND  0FH
+BCDK1:  AND  0FH
         ADD  A,90H
         DAA
         ADC  A,40H
         DAA
-        JP   LEFED
+        JP   OUTA
 ;
-LEFED:  PUSH HL
+OUTA:   PUSH HL        ; Ausgabe Zeichen aus Akku
         PUSH DE
         PUSH BC
-        LD   E,A
-        LD   C,02H
-        CALL L0005
+        LD   E,A       ; ASCII-Zeichen nach E
+        LD   C,02H     ; BDOS-FKT.-Nr. 2 (CONSOLEN-Ausgabe)
+        CALL BDOSF     ; BDOS Aufruf
         POP  BC
         POP  DE
         POP  HL
         RET
+;
+;******************************   Ende LOAD  *****************
 ;
 LEFFA:  LD   HL,(DPH)
         LD   (DF515),HL
@@ -1425,7 +1495,7 @@ LF03D:  SRL  H
 LF06E:  LD   A,(DF51B)
         OR   A
         CALL NZ,LF0CE
-LF075:  LD   HL,0F4FCH
+LF075:  LD   HL,DRIVE
         LD   DE,0F505H
         LD   BC,0009H
         LDIR
@@ -1470,7 +1540,8 @@ LF0C9:  XOR  A
         RET
 ;
 LF0CE:  LD   A,06H
-        LD   HL,043EH
+        DEFB 21H             ; LD   HL,043EH  -> 21 3E 04
+LF0D1:  LD   A,04H  
         LD   (DF517),A
         LD   HL,0F51FH
         LD   (DF50A),HL
@@ -1479,7 +1550,7 @@ LF0CE:  LD   A,06H
 ;
 LF0E1:  LD   A,(DF4FB)
         LD   (DF517),A
-        LD   HL,0F4FCH
+        LD   HL,DRIVE
 LF0EA:  LD   DE,0F50EH
         LD   BC,0009H
         LDIR
@@ -1921,66 +1992,66 @@ LF3E0:  LD   BC,0D85H
         XOR  A
         OUT  (C),A
         JR   LF3E0
-;Ansprung unklar
-LF3F1:  DI
+;Ansprung unklar               fuer Debugging
+MOHEX:  DI
         PUSH AF
-        CALL LE95C
-        CALL L07EE
-        CALL LE957
+        CALL AC1MOD
+        CALL OUTHEX   ; gibt den Akku als zweistellige Hexzahl auf dem Schirm aus
+        CALL CPMMOD
         POP  AF
         EI
         RET
-;Ansprung unklar
-LF3FF:  DI
+;Ansprung unklar               fuer Debugging
+MOHL:   DI
         PUSH AF
-        CALL LE95C
-        CALL L07F1
-        RST  08H
-        CALL LE957
+        CALL AC1MOD
+        CALL OUTHL    ; gibt das HL-Register als vierstellige Hexzahl auf dem Schirm
+        RST  08H      ; warten auf Taste
+        CALL CPMMOD
         POP  AF
         EI
         RET
 ;
-LF40E:  DEFM "CONIN-ZBIOS-STACK==26BYTES"
         DEFM "CONIN-ZBIOS-STACK==26BYTES"
-        DEFM "CONOUT-STACK_CONOUT-STACK_CONOUT-STACK"
+        DEFM "CONIN-ZBIOS-STACK==26BYTES"
+CINSP:  DEFM "CONOUT-STACK_CONOUT-STACK_CONOUT-STACK"
+COUTSP: DEFM "LOAD-ZBIOS-STACK=48BYTES"
         DEFM "LOAD-ZBIOS-STACK=48BYTES"
-        DEFM "LOAD-ZBIOS-STACK=48BYTES"
-        DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
+LOADSP: DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
+CPMSTK: NOP
 ;
-        NOP
-        NOP
-DF4C3:  NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-DF4CA:  NOP
-        NOP
-        NOP
-DF4CD:  DEFB 1,20H,0
-DF4D0:  NOP
-DF4D1:  NOP
-DF4D2:  NOP
-DF4D3:  NOP
-        NOP
-DF4D5:  NOP
-        NOP
-        NOP
-DF4D8:  NOP
-        NOP
-DF4DA:  NOP
-        NOP
-DF4DC:  NOP
-        NOP
-DF4DE:  NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
+RAFTRK: DEFB 0   ; RAFTRK  EQU  0F4C2H
+RAFSEC: DEFB 0
+        NOP   ; kein Verweis   F4C4
+        NOP   ; kein Verweis   F4C5
+        NOP   ; kein Verweis   F4C6
+        NOP   ; kein Verweis   F4C7
+        NOP   ; kein Verweis   F4C8
+        NOP   ; kein Verweis   F4C9
+CHKSUM: DEFW 0   ; Merkzelle f. Pruefsumme       F4CAh
+        NOP      ; kein Verweis   F4CC
+CUFLAG: DEFB 1   ;CUON/CUOFF   1/0  KursorFlag   F4CDh
+CUALT:  DEFB 20H ;Cursor OFF Symbol
+STZ00:  DEFB 0   ;Merkzelle Anz. BS-Steuerzeichen   F4CFh
+STZ01:  DEFB 0   ;Merkzelle fuer 1. ESC-Steuerzeichen
+STZ02:  DEFB 0   ;Merkzelle fuer 2. ESC-Steuerzeichen
+;
+CHAR:   DEFB 0   ; Merkzelle Zeichen <> Cursor    F4D2h
+;
+COLOR:  DEFB 0   ; Merkzelle BWS-Farbe (0=Monochrom-BWS)
+COLO1:  DEFB 0   ; aktuelle Farbe ohne invers und intensiv
+COLO2:  DEFB 0   ; Farbe fuer Monitor und CP/M Warmstart
+;
+        NOP      ; kein Verweis   F4D6
+        NOP      ; kein Verweis   F4D7
+SPCIN:  DEFW 0    ;F4D8
+SPCOUT: DEFW 0
+SPLOAD: DEFW 0
+OLDNMI: DEFW 0    ;F4DE
+        NOP      ; kein Verweis   F4E0
+        NOP      ; kein Verweis   F4E1
+DF4E2:  NOP
+        NOP      ; Merkzelle
 DF4E4:  NOP
 DF4E5:  NOP
 DF4E6:  NOP
@@ -1989,56 +2060,48 @@ DF4E8:  NOP
 DF4E9:  NOP
 DF4EA:  NOP
 DF4EB:  NOP
+        NOP      ; 4 Merkzellen  
         NOP
-        NOP
-CTAB:   NOP               ;FDC Befehlsbyte
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
+CTAB:   NOP      ;FDC Befehlsbyte
+        NOP      ; 4 Merkzellen  Ende
+DF4F0:  NOP      ;F4F0
+        NOP      ; kein Verweis   F4F1
+        NOP      ; kein Verweis   F4F2
+        NOP      ; kein Verweis   F4F3
+        NOP      ; kein Verweis   F4F4
+        NOP      ; kein Verweis   F4F5
+        NOP      ; kein Verweis   F4F6
 DF4F7:  NOP
 DF4F8:  NOP
 DF4F9:  NOP
 LATPU:  NOP
-DF4FB:  DEFB 4
-        NOP
+DF4FB:  DEFB 4      ; 4 = READ,  6 = WRITE
+DRIVE:  DEFB 0      ; LW-Nr.
 TRACK:  DEFW 0
-SECTOR: DEFW 0
+SECTOR: DEFW 0      ;F4FF
 DMA:    DEFW 0
-DPH:    NOP
-        NOP
-        NOP
-DF506:  NOP
-        NOP
-DF508:  NOP
-        NOP
-DF50A:  NOP
-        NOP
-        NOP
-        NOP
+DPH:    DEFW 0
+DF505:  DEFB 0
+DF506:  DEFW 0
+DF508:  DEFW 0
+DF50A:  DEFW 0
+        NOP      ; kein Verweis   F50C
+        NOP      ; kein Verweis   F50D
 DF50E:  NOP
 DF50F:  NOP
 DF510:  NOP
-DF511:  NOP
-        NOP
-DF513:  NOP
-        NOP
-DF515:  NOP
-        NOP
+DF511:  DEFW 0
+DF513:  DEFW 0
+DF515:  DEFW 0
 DF517:  DEFB 4
-DF518:  NOP
-        NOP
-DF51A:  NOP
+DF518:  DEFW 0
+DF51A:  DEFB 0
 DF51B:  NOP
 DF51C:  NOP
 DF51D:  NOP
 DF51E:  NOP
 ;
-        DEFS 1024,0
+        DEFS 1024,0       ;F51Fh
 DIRBF:  DEFS 128,0        ;0F91FH
 ALL01:  DEFS 50,0         ;0F99FH
 ALL02:  DEFS 504,0        ;0F9D1H
@@ -2050,73 +2113,44 @@ CHK00:  DEFS 32,0         ;0FE2DH
 CHK02:  DEFS 32,0         ;0FE4DH
 CHK06:  DEFS 32,0         ;0FE6DH
         DEFS 115,1AH      ;0FE8DH
-ALL00:                    ;ALL00 zeigt hinter das BIOS
+ALL00:                    ;ALL00 zeigt hinter das BIOS   FF00
+;                          1024k / 2k Bloecke = 512 Bloecke
+;                          512 / 8 bit/Byte = 64 Byte ALV benoetigt
 ;
-L0000   EQU  0000H
-L0005   EQU  0005H
-L01A5   EQU  01A5H
-L0221   EQU  0221H
-L05CE   EQU  05CEH
-L07EE   EQU  07EEH
-L07F1   EQU  07F1H
-L0B32   EQU  0B32H
-L77F4   EQU  77F4H
-LED3C   EQU  0ED3CH
-LEE65   EQU  0EE65H
-LEE8C   EQU  0EE8CH
-LEF69   EQU  0EF69H
-LEF74   EQU  0EF74H
-LEF7D   EQU  0EF7DH
-LEFAB   EQU  0EFABH
-LEFAD   EQU  0EFADH
-LEFBF   EQU  0EFBFH
-LF0D1   EQU  0F0D1H
-D0000   EQU  0000H        ;Die Datenworte muessen alle noch aufgeloest werden!
-D0001   EQU  0001H
-D0003   EQU  0003H
-D0004   EQU  0004H
-D0005   EQU  0005H
-D0006   EQU  0006H
-D0038   EQU  0038H
-D0039   EQU  0039H
-D0066   EQU  0066H
-D0067   EQU  0067H
-D1800   EQU  1800H
-D1818   EQU  1818H
-D181F   EQU  181FH
-D185B   EQU  185BH
-D185D   EQU  185DH
-DEEDA   EQU  0EEDAH
-DF4C2   EQU  0F4C2H
-DF4CE   EQU  0F4CEH
-DF4CF   EQU  0F4CFH
-DF4D4   EQU  0F4D4H
-DF4E2   EQU  0F4E2H
-DF4F0   EQU  0F4F0H
-DRIVE   EQU  0F4FCH
-DFF80   EQU  0FF80H
+;
+;
+;
+DFF80   EQU  0FF80H     ; InterruptVectoren ?
 DFF82   EQU  0FF82H
 DFF84   EQU  0FF84H
 DFF86   EQU  0FF86H
 DFF88   EQU  0FF88H
 DFF8A   EQU  0FF8AH
-DFFD0   EQU  0FFD0H
-P00     EQU  00H
+;
+;#############################   PortAdressen   ##############
+;
+P00     EQU  00H     ; CTC
 P01     EQU  01H
 P02     EQU  02H
 P03     EQU  03H
-P04     EQU  04H
+;
+P04     EQU  04H     ; PIO 1
 P05     EQU  05H
 P06     EQU  06H
-P11     EQU  11H
-P1E     EQU  1EH
-P8A     EQU  8AH
+;
+P11     EQU  11H     ; IOSEL 4   ??
+;
+P1E     EQU  1EH     ; CP/M - Umschalter
+;
+P8A     EQU  8AH     ; GIDE ? -> 80h
 P8B     EQU  8BH
 P8C     EQU  8CH
 P8D     EQU  8DH
 P8E     EQU  8EH
 P8F     EQU  8FH
-PF0     EQU  0F0H
+;
+PF0     EQU  0F0H     ; C-BWS-(Steuer)Port
+;
 ;
         .DEPHASE
         END

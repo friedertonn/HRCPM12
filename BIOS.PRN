@@ -3,7 +3,7 @@
 
                                 ; ***********************************************************
                                 ; *                                                         *
-                                ; *  HRCPM12-BIOS fuer den AC 1     Version vom 20.09.2021  *
+                                ; *  HRCPM12-BIOS fuer den AC 1     Version vom 02.04.2022  *
                                 ; *                                                         *
                                 ; ***********************************************************
                                 ;
@@ -20,6 +20,37 @@
                                 ;
                                         .PHASE 0E600H
                                 ;
+  07EE                          OUTHEX  EQU  07EEH
+  07F1                          OUTHL   EQU  07F1H
+  01A5                          RSA     EQU  01A5H        ; CPU-Register nach RSA - nicht MO11 !
+  05CE                          REGIST  EQU  05CEH        ; Registeranzeige - nicht MO11!
+  0B32                          KLOAD   EQU  0B32H        ; Load From Kassette - Nicht MO11!!
+                                ;
+                                ;
+  1800                          CUPOS   EQU  1800H
+  1818                          BREAK   EQU  1818H        ; NMI Sprungziel
+  181F                          CBWSB   EQU  181FH        ; Das Testergebnis steht auf der Adresse 181Fh: 
+                                ;                         ; 0 = kein Color-BWS, sonst der eingestellte Farbwert.
+  185B                          ARG1    EQU  185BH
+  185D                          ARG2    EQU  185DH
+                                ;
+                                ;
+  0000                          WARMBT  EQU  0000H        ; WBOOT der Grundseite.
+  0005                          BDOSF   EQU  0005H        ; BDOS-Aufruf + TPA-MAX
+  0038                          RST38   EQU  0038H        ; CP/M-Break
+  0066                          NMI     EQU  0066H
+                                ;
+                                ;
+  0003                          IOBYTE  EQU  0003H
+  0004                          LWBYTE  EQU  0004H        ; LW+USER Nr.
+                                ;
+  FFD0                          ZEIPUF  EQU  0FFD0H       ; 1 + 32 Byte Puffer f. ?Tastatur
+                                ;
+                                ;
+  D806                          BDOS    EQU  0D806H       ; BDOS-EinsprungAdresse
+  E603                          WBOOTB  EQU  0E603H       ; BIOS-Eisprung WBOOT
+                                ;
+                                ;
   B000                          HPRDSK  EQU  0B000H       ;Hilfsprogramm: Format RAM-Disk
   D000                          EQUCCP  EQU  0D000H       ;Start CCP
                                 ;
@@ -31,6 +62,11 @@
   0041                          DFDC    EQU  41H          ;Datenport FDC
   0043                          WAIT    EQU  43H          ;IO-Adr. /WAIT Monoflop
   0045                          LATCH   EQU  45H          ;IO-Adr. Latch 74LS175
+                                ;
+	MACRO-80 3.44	09-Dec-81	PAGE	1-1
+
+
+                                ;============================================================================
                                 ;
   E600    C3 E83F                       JP   BOOT
   E603    C3 E8D5                       JP   WBOOT
@@ -63,9 +99,6 @@
   E644    E646                  DPHX:   DEFW DPHY         ;Zeiger auf den 1. Block?
   E646    E654                  DPHY:   DEFW DPH0         ;DPH von LW A:
   E648    E664                          DEFW DPH1         ;DPH von LW B:
-	MACRO-80 3.44	09-Dec-81	PAGE	1-1
-
-
   E64A    E674                          DEFW DPH2         ;DPH von LW C:
   E64C    E684                          DEFW DPH3         ;DPH von LW D:
   E64E    E694                          DEFW DPH4         ;DPH von LW E:
@@ -95,6 +128,9 @@
   E678    0000                          DEFW 0
   E67A    0000                          DEFW 0
   E67C    F91F                          DEFW DIRBF
+	MACRO-80 3.44	09-Dec-81	PAGE	1-2
+
+
   E67E    E6F3                          DEFW DPB2
   E680    FE4D                          DEFW CHK02
   E682    F9D1                          DEFW ALL02
@@ -128,9 +164,6 @@
                                 ;
   E6B4    0000                  DPH6:   DEFW 0            ;Floppy G:
   E6B6    0000                          DEFW 0
-	MACRO-80 3.44	09-Dec-81	PAGE	1-2
-
-
   E6B8    0000                          DEFW 0
   E6BA    0000                          DEFW 0
   E6BC    F91F                          DEFW DIRBF
@@ -150,7 +183,7 @@
   E6CD    003F                          DEFW 63           ;64 DIR - Eintaege
   E6CF    0080                          DEFW 080H         ;1 DIR-Block
   E6D1    0000                          DEFW 0            ;weil nichtwechselbares Medium
-  E6D3    0001                          DEFW 1            ;16 Kbyte System
+  E6D3    0001                          DEFW 1            ;16 Kbyte System / Track-Offset
                                 ;
   E6D5    F019                          DEFW LF019        ;???
                                 ;
@@ -160,6 +193,9 @@
   E6DB    00                            DEFB 0
   E6DC    0185                          DEFW 389          ;390 * 2 Kbyte - Bloecke
   E6DE    007F                          DEFW 127          ;128 DIR - Eintraege
+	MACRO-80 3.44	09-Dec-81	PAGE	1-3
+
+
   E6E0    00C0                          DEFW 0C0H         ;2 DIR-Bloecke
   E6E2    0020                          DEFW 32
   E6E4    0002                          DEFW 2            ;20 Kbyte System
@@ -193,9 +229,6 @@
   E714    07FF                          DEFW 07FFH        ;2048 * 8k-Bloecke = 16384k = 16M
   E716    0FFF                          DEFW 0FFFH        ;4096 DIR-Eintraege
   E718    FFFF                          DEFW 0FFFFH       ;16 DIR-Bloecke
-	MACRO-80 3.44	09-Dec-81	PAGE	1-3
-
-
   E71A    0000                          DEFW 0            ;weil nichtwechselbares Medium
   E71C    0000                          DEFW 0            ;kein System-Track
                                 ;
@@ -225,6 +258,9 @@
   E749    04                            DEFB 4            ;Blockgroesse = 2 Kbyte
   E74A    0F                            DEFB 15
   E74B    00                            DEFB 0
+	MACRO-80 3.44	09-Dec-81	PAGE	1-4
+
+
   E74C    013F                          DEFW 319          ;320 * 2 Kbyte - Bloecke
   E74E    007F                          DEFW 127          ;128 DIR - Eintraege
   E750    00C0                          DEFW 0C0H         ;2 DIR-Bloecke
@@ -251,16 +287,13 @@
   E776    50 01 43 FF                   DEFB 50H,1,43H,0FFH
   E77A    E1 33 FF                      DEFB 0E1H,33H,0FFH
                                 ;
-  E77D    0C                    TEXT1:  DEFB 0CH
+  E77D    0C                    TXT01:  DEFB 0CH
   E77E    48 52 43 50                   DEFM "HRCPM AC1 V1.2 CPA"
   E782    4D 20 41 43           
   E786    31 20 56 31           
   E78A    2E 32 20 43           
   E78E    50 41                 
   E790    32 34 2E 30                   DEFM "24.08.86 FA-MODE "
-	MACRO-80 3.44	09-Dec-81	PAGE	1-4
-
-
   E794    38 2E 38 36           
   E798    20 46 41 2D           
   E79C    4D 4F 44 45           
@@ -284,12 +317,15 @@
   E7D8    4D 42 20 20           
   E7DC    45 30 3A 20           
   E7E0    31 36 4D 42           
-  E7E4    0D 0A                 		DEFB 0DH,0AH
+  E7E4    0D 0A                         DEFB 0DH,0AH
   E7E6    46 44 43 20                   DEFM "FDC (45H) B0:5*1024"
   E7EA    28 34 35 48           
   E7EE    29 20 42 30           
   E7F2    3A 35 2A 31           
   E7F6    30 32 34              
+	MACRO-80 3.44	09-Dec-81	PAGE	1-5
+
+
   E7F9    20 46 30 3A                   DEFM " F0:16*256 G1:5*1024"
   E7FD    31 36 2A 32           
   E801    35 36 20 47           
@@ -309,35 +345,35 @@
   E835    61 74 20 41           
   E839    3A 28 4A 29           
   E83D    3F                    
-  E83E    00                    		DEFB 0
+  E83E    00                            DEFB 0
+                                ;
+                                ;******************************   BOOT   *******************************
                                 ;
   E83F    F3                    BOOT:   DI
-  E840    31 F4C1                       LD   SP,0F4C1H
+  E840    31 F4C1                       LD   SP,CPMSTK
   E843    AF                            XOR  A
   E844    32 F4FA                       LD   (LATPU),A    ;FDC-Latch zuruecksetzen
-  E847    3E 82                         LD   A,82H
-  E849    32 F4CD                       LD   (DF4CD),A
-  E84C    3E 20                         LD   A,20H
-  E84E    32 F4CE                       LD   (DF4CE),A
-  E851    CD ED50                       CALL LED50
+  E847    3E 82                         LD   A,82H        ; Cursor EIN ?
+  E849    32 F4CD                       LD   (CUFLAG),A
+  E84C    3E 20                         LD   A,20H        ; alternierendes Cursor-Zeichen
+  E84E    32 F4CE                       LD   (CUALT),A
+  E851    CD ED50                       CALL BWSINI
   E854    DB 05                         IN   A,(P05)
-  E856    CB 9F                         RES  3,A
+  E856    CB 9F                         RES  3,A           ; BildInvers (PIO1B) Bit3 aus
   E858    D3 05                         OUT  (P05),A
-	MACRO-80 3.44	09-Dec-81	PAGE	1-5
-
-
-  E85A    2A 1818                       LD   HL,(D1818)
-  E85D    22 F4DE                       LD   (DF4DE),HL
-  E860    21 E603                       LD   HL,0E603H
-  E863    22 1818                       LD   (D1818),HL
-  E866    CD E957                       CALL LE957
+  E85A    2A 1818                       LD   HL,(BREAK)    ; Sprungtabelle NMI MONOTOR
+  E85D    22 F4DE                       LD   (OLDNMI),HL   ; sichern
+  E860    21 E603                       LD   HL,WBOOTB     ; CP/M-Warmstart-Einsprungadresse
+  E863    22 1818                       LD   (BREAK),HL
+  E866    CD E957                       CALL CPMMOD
   E869    AF                            XOR  A
   E86A    32 F51A                       LD   (DF51A),A
-  E86D    32 0003                       LD   (D0003),A
-  E870    32 0004                       LD   (D0004),A
-  E873    32 FFD0                       LD   (DFFD0),A
-  E876    CD E92D                       CALL LE92D
-  E879    3E 03                         LD   A,03H
+  E86D    32 0003                       LD   (IOBYTE),A
+  E870    32 0004                       LD   (LWBYTE),A
+  E873    32 FFD0                       LD   (ZEIPUF),A
+  E876    CD E92D                       CALL BOOT1
+                                ;
+  E879    3E 03                         LD   A,03H         ; CTC init + INT-Mode 2
   E87B    D3 00                         OUT  (P00),A
   E87D    D3 01                         OUT  (P01),A
   E87F    D3 02                         OUT  (P02),A
@@ -352,6 +388,9 @@
   E895    22 FF82                       LD   (DFF82),HL
   E898    21 F2EA                       LD   HL,0F2EAH
   E89B    22 FF86                       LD   (DFF86),HL
+	MACRO-80 3.44	09-Dec-81	PAGE	1-6
+
+
   E89E    3E 80                         LD   A,80H
   E8A0    D3 00                         OUT  (P00),A
   E8A2    3E FF                         LD   A,0FFH
@@ -360,14 +399,16 @@
   E8A9    D3 03                         OUT  (P03),A
   E8AB    AF                            XOR  A
   E8AC    D3 03                         OUT  (P03),A
+                                ;
   E8AE    21 E9B2                       LD   HL,0E9B2H
   E8B1    22 FF88                       LD   (DFF88),HL
   E8B4    21 EA05                       LD   HL,0EA05H
   E8B7    22 FF8A                       LD   (DFF8A),HL
   E8BA    01 0506                       LD   BC,0506H
-  E8BD    21 EA13                       LD   HL,0EA13H
-  E8C0    ED B3                         OTIR
-  E8C2    21 E77D                       LD   HL,TEXT1
+  E8BD    21 EA13                       LD   HL,PIO1TAB
+  E8C0    ED B3                         OTIR               ; PIO1 PA Init
+                                ;
+  E8C2    21 E77D                       LD   HL,TXT01      ; Begruessungstext
   E8C5    CD EA1A                       CALL OUTTXT
   E8C8    FB                            EI
   E8C9    CD EA34                       CALL CONIN
@@ -376,86 +417,91 @@
   E8D0    CC EE65                       CALL Z,RDFORM
   E8D3    18 1E                         JR   WBOOT1
                                 ;
-  E8D5    31 F4C1               WBOOT:  LD   SP,0F4C1H
-  E8D8    CD E957                       CALL LE957
+                                ;*******************************   WBOOT   *****************************
+                                ;
+  E8D5    31 F4C1               WBOOT:  LD   SP,CPMSTK
+  E8D8    CD E957                       CALL CPMMOD
   E8DB    3A F51B                       LD   A,(DF51B)
   E8DE    B7                            OR   A
   E8DF    C4 F0CE                       CALL NZ,LF0CE
-  E8E2    06 2C                         LD   B,2CH
+  E8E2    06 2C                         LD   B,2CH        ;44 Records CCP+BDOS
   E8E4    21 EDC5                       LD   HL,READ
-  E8E7    22 EEDA                       LD   (DEEDA),HL
-  E8EA    CD EEC0                       CALL WRCCP
+  E8E7    22 EEDA                       LD   (WRCCP2),HL
+  E8EA    CD EEC0                       CALL WRCCP        ; wirklich READCCP !
   E8ED    21 EDCA                       LD   HL,WRITE
-  E8F0    22 EEDA                       LD   (DEEDA),HL
-  E8F3    CD E92D               WBOOT1: CALL LE92D
-	MACRO-80 3.44	09-Dec-81	PAGE	1-6
-
-
+  E8F0    22 EEDA                       LD   (WRCCP2),HL
+                                ;
+  E8F3    CD E92D               WBOOT1: CALL BOOT1
   E8F6    3E 01                         LD   A,01H
-  E8F8    32 F4CD                       LD   (DF4CD),A
-  E8FB    3A F4D5                       LD   A,(DF4D5)
-  E8FE    32 F4D3                       LD   (DF4D3),A
-  E901    E6 77                         AND  77H
-  E903    32 F4D4                       LD   (DF4D4),A
-  E906    3A 0004                       LD   A,(D0004)
+  E8F8    32 F4CD                       LD   (CUFLAG),A
+  E8FB    3A F4D5                       LD   A,(COLO2)
+  E8FE    32 F4D3                       LD   (COLOR),A     ;Arbeitszelle Farbbyte
+  E901    E6 77                         AND  77H           ;Intensivdarstellung maskieren
+  E903    32 F4D4                       LD   (COLO1),A     ;Arbeitszelle "Normaldarstellung"
+  E906    3A 0004                       LD   A,(LWBYTE)
   E909    E6 1F                         AND  1FH
   E90B    4F                            LD   C,A
   E90C    CD ED88                       CALL SELDSK
   E90F    2A E641                       LD   HL,(CCP)
-  E912    E9                            JP   (HL)         ;JP CCP
+  E912    E9                            JP   (HL)         ; JP CCP
                                 ;
-  E913    F5                    LE913:  PUSH AF
+                                ;
+  E913    F5                    CPMERR: PUSH AF           ; CP/M-Fehler - zurueck z. MONITOR
   E914    E5                            PUSH HL
   E915    CD E990                       CALL LE990
   E918    DF                            RST  18H
   E919    20 43 50                      DEFM " CP"
   E91C    CD                            DEFB 4DH+80H      ;"M+80H
   E91D    E1                            POP  HL
+	MACRO-80 3.44	09-Dec-81	PAGE	1-7
+
+
   E91E    F1                            POP  AF
-  E91F    CD 01A5                       CALL L01A5
+  E91F    CD 01A5                       CALL RSA
   E922    E1                            POP  HL
   E923    2B                            DEC  HL
-  E924    CD 07F1                       CALL L07F1
+  E924    CD 07F1                       CALL OUTHL
   E927    DF                            RST  18H
   E928    8D                            DEFB 0DH+80H
-  E929    CD 05CE                       CALL L05CE
-  E92C    FF                            RST  38H
-  E92D    3E C3                 LE92D:  LD   A,0C3H
-  E92F    32 0000                       LD   (D0000),A
-  E932    32 0005                       LD   (D0005),A
-  E935    32 0038                       LD   (D0038),A
-  E938    32 0066                       LD   (D0066),A
-  E93B    21 E603                       LD   HL,0E603H
-  E93E    22 0001                       LD   (D0001),HL
-  E941    22 0067                       LD   (D0067),HL
-  E944    21 D806                       LD   HL,0D806H
-  E947    22 0006                       LD   (D0006),HL
-  E94A    21 E913                       LD   HL,0E913H
-  E94D    22 0039                       LD   (D0039),HL
+  E929    CD 05CE                       CALL REGIST       ; MONI - Registeranzeige - nicht MO11 !!!
+  E92C    FF                            RST  38H          ; zurueck zum MONI
+                                ;
+                                ;
+  E92D    3E C3                 BOOT1:  LD   A,0C3H        ; CP/M "Grundseite" INIT
+  E92F    32 0000                       LD   (WARMBT),A
+  E932    32 0005                       LD   (BDOSF),A
+  E935    32 0038                       LD   (RST38),A
+  E938    32 0066                       LD   (NMI),A
+  E93B    21 E603                       LD   HL,WBOOTB
+  E93E    22 0001                       LD   (WARMBT+1),HL
+  E941    22 0067                       LD   (NMI+1),HL
+  E944    21 D806                       LD   HL,BDOS
+  E947    22 0006                       LD   (BDOSF+1),HL
+  E94A    21 E913                       LD   HL,CPMERR
+  E94D    22 0039                       LD   (RST38+1),HL
   E950    21 0080                       LD   HL,0080H
   E953    22 F501                       LD   (DMA),HL
   E956    C9                            RET
                                 ;
-  E957    F5                    LE957:  PUSH AF
-  E958    3E 01                         LD   A,01H
-  E95A    18 02                         JR   LE95E
+                                ;+++++++++++++++++++++++++++++++++   Ende BOOT / WBOOT   +++++++++++++++++
                                 ;
-  E95C    F5                    LE95C:  PUSH AF
+  E957    F5                    CPMMOD: PUSH AF           ; CP/M EIN
+  E958    3E 01                         LD   A,01H
+  E95A    18 02                         JR   MOD1
+                                ;
+  E95C    F5                    AC1MOD: PUSH AF           ; CP/M AUS (AC1-Mode)
   E95D    AF                            XOR  A
-  E95E    D3 1E                 LE95E:  OUT  (P1E),A
+  E95E    D3 1E                 MOD1:   OUT  (P1E),A
   E960    F1                            POP  AF
   E961    C9                            RET
                                 ;
-  E962    01 FFFF               LE962:  LD   BC,0FFFFH
-  E965    1A                    LE965:  LD   A,(DE)
+  E962    01 FFFF               CHKSU:  LD   BC,0FFFFH     ; Pruefsumme berechnen
+  E965    1A                    CHKS1:  LD   A,(DE)
   E966    A8                            XOR  B
   E967    47                            LD   B,A
   E968    0F                            RRCA
   E969    0F                            RRCA
   E96A    0F                            RRCA
-	MACRO-80 3.44	09-Dec-81	PAGE	1-7
-
-
   E96B    0F                            RRCA
   E96C    E6 0F                         AND  0FH
   E96E    A8                            XOR  B
@@ -472,6 +518,9 @@
   E97A    0F                            RRCA
   E97B    E6 F0                         AND  0F0H
   E97D    A9                            XOR  C
+	MACRO-80 3.44	09-Dec-81	PAGE	1-8
+
+
   E97E    4F                            LD   C,A
   E97F    F1                            POP  AF
   E980    E6 E0                         AND  0E0H
@@ -482,28 +531,30 @@
   E986    2B                            DEC  HL
   E987    7C                            LD   A,H
   E988    B5                            OR   L
-  E989    20 DA                         JR   NZ,LE965
+  E989    20 DA                         JR   NZ,CHKS1
   E98B    C9                            RET
                                 ;
-  E98C    21 0000               EXIT:   LD   HL,0000H
+  E98C    21 0000               EXIT:   LD   HL,0000H      ; RuecksprungAdresse f. RET
   E98F    E5                            PUSH HL
-  E990    3E 00                 LE990:  LD   A,00H
+  E990    3E 00                 LE990:  LD   A,00H         ; AC1-Mode
   E992    D3 1E                         OUT  (P1E),A
   E994    AF                            XOR  A
-  E995    D3 11                         OUT  (P11),A
-  E997    2A F4DE                       LD   HL,(DF4DE)
-  E99A    22 1818                       LD   (D1818),HL
+  E995    D3 11                         OUT  (P11),A       ; ? IOSEL4
+  E997    2A F4DE                       LD   HL,(OLDNMI)
+  E99A    22 1818                       LD   (BREAK),HL    ; alten NMI wiederherstellen
   E99D    3E 03                         LD   A,03H
-  E99F    D3 00                         OUT  (P00),A
+  E99F    D3 00                         OUT  (P00),A       ; INIT CTC
   E9A1    D3 01                         OUT  (P01),A
   E9A3    D3 02                         OUT  (P02),A
   E9A5    D3 03                         OUT  (P03),A
-  E9A7    D3 06                         OUT  (P06),A
+  E9A7    D3 06                         OUT  (P06),A       ; INIT PIO1 Port A (Tastatur) ohne INTERRUPT
   E9A9    3E CF                         LD   A,0CFH
   E9AB    D3 06                         OUT  (P06),A
   E9AD    3E FF                         LD   A,0FFH
   E9AF    D3 06                         OUT  (P06),A
-  E9B1    C9                            RET
+  E9B1    C9                            RET                ; zurueck zum MONITOR, normal
+                                ;
+                                ;
                                 ;Ansprung unklar
   E9B2    F3                    LE9B2:  DI
   E9B3    F5                            PUSH AF
@@ -518,9 +569,6 @@
   E9C1    B9                            CP   C
   E9C2    20 3B                         JR   NZ,LE9FF
   E9C4    10 F9                         DJNZ LE9BF
-	MACRO-80 3.44	09-Dec-81	PAGE	1-8
-
-
   E9C6    FE 80                         CP   80H
   E9C8    20 00                         JR   NZ,LE9CA
   E9CA    21 EA18               LE9CA:  LD   HL,0EA18H
@@ -535,6 +583,9 @@
   E9DC    77                            LD   (HL),A
   E9DD    C5                            PUSH BC
   E9DE    4F                            LD   C,A
+	MACRO-80 3.44	09-Dec-81	PAGE	1-9
+
+
   E9DF    09                            ADD  HL,BC
   E9E0    C1                            POP  BC
   E9E1    CB B9                         RES  7,C
@@ -559,530 +610,574 @@
   EA01    F1                            POP  AF
   EA02    FB                            EI
   EA03    ED 4D                         RETI
-                                ;Ansprung unklar
+                                ;
+                                ;Ansprung unklar      INIT PIO1 Port A fuer Interruptbetrieb
+                                ;
   EA05    F3                    LEA05:  DI
   EA06    F5                            PUSH AF
   EA07    C5                            PUSH BC
   EA08    E5                            PUSH HL
-  EA09    21 EA13                       LD   HL,0EA13H
-  EA0C    01 0506                       LD   BC,0506H
+  EA09    21 EA13                       LD   HL,PIO1TAB
+  EA0C    01 0506                       LD   BC,0506H      ; 5 Bytes f. PIO1 A Control
   EA0F    ED B3                         OTIR
   EA11    18 EC                         JR   LE9FF
                                 ;Ansprung unklar
-  EA13    88                    LEA13:  ADC  A,B
-  EA14    CF                            RST  08H
-  EA15    FF                            RST  38H
-  EA16    B7                            OR   A
-  EA17    7F                            LD   A,A
+  EA13    88 CF FF B7           PIO1TAB:  DEFB 88H,0CFH,0FFH,0B7H,7FH   ; Tabelle PIO1 Port A
+  EA17    7F                    
+                                ;
   EA18    8A                            ADC  A,D
   EA19    87                            ADD  A,A
+                                ;
+                                ;
   EA1A    C5                    OUTTXT: PUSH BC
   EA1B    F5                            PUSH AF
-  EA1C    4E                    LEA1C:  LD   C,(HL)
+  EA1C    4E                    TEXT1:  LD   C,(HL)
   EA1D    79                            LD   A,C
   EA1E    B7                            OR   A
-  EA1F    28 06                         JR   Z,LEA27
+  EA1F    28 06                         JR   Z,TEXT2
   EA21    CD EA94                       CALL CONOUT
-	MACRO-80 3.44	09-Dec-81	PAGE	1-9
-
-
   EA24    23                            INC  HL
-  EA25    18 F5                         JR   LEA1C
-                                ;
-  EA27    F1                    LEA27:  POP  AF
+  EA25    18 F5                         JR   TEXT1
+  EA27    F1                    TEXT2:  POP  AF
   EA28    C1                            POP  BC
   EA29    C9                            RET
+                                ;
                                 ;Ansprung unklar
   EA2A    AF                    LEA2A:  XOR  A
   EA2B    C9                            RET
                                 ;
-  EA2C    3A FFD0               CONST:  LD   A,(DFFD0)
+                                ;************************   CONST   *************************
+                                ;
+	MACRO-80 3.44	09-Dec-81	PAGE	1-10
+
+
+  EA2C    3A FFD0               CONST:  LD   A,(ZEIPUF)
   EA2F    B7                            OR   A
   EA30    C8                            RET  Z
   EA31    3E FF                         LD   A,0FFH
   EA33    C9                            RET
                                 ;
+                                ;***************************   CONIN   ***********************
+                                ;
   EA34    F3                    CONIN:  DI
-  EA35    ED 73 F4D8                    LD   (DF4D8),SP
-  EA39    31 F442                       LD   SP,0F442H
+  EA35    ED 73 F4D8                    LD   (SPCIN),SP
+  EA39    31 F442                       LD   SP,CINSP
   EA3C    C5                            PUSH BC
   EA3D    D5                            PUSH DE
   EA3E    E5                            PUSH HL
-  EA3F    AF                    LEA3F:  XOR  A
+  EA3F    AF                    CON10:  XOR  A
   EA40    F3                            DI
-  EA41    2A FFD0                       LD   HL,(DFFD0)
+  EA41    2A FFD0                       LD   HL,(ZEIPUF)
   EA44    B5                            OR   L
-  EA45    20 19                         JR   NZ,LEA60
+  EA45    20 19                         JR   NZ,CON12
   EA47    FB                            EI
-  EA48    10 F5                         DJNZ LEA3F
+  EA48    10 F5                         DJNZ CON10
   EA4A    F3                            DI
-  EA4B    D3 1E                         OUT  (P1E),A
-  EA4D    2A 1800                       LD   HL,(D1800)
+  EA4B    D3 1E                         OUT  (P1E),A         ; AC1 Mode
+  EA4D    2A 1800                       LD   HL,(CUPOS)
   EA50    0C                            INC  C
   EA51    CB 71                         BIT  6,C
-  EA53    3A F4CE                       LD   A,(DF4CE)
-  EA56    28 02                         JR   Z,LEA5A
+  EA53    3A F4CE                       LD   A,(CUALT)
+  EA56    28 02                         JR   Z,CON11
   EA58    3E 0F                         LD   A,0FH
-  EA5A    77                    LEA5A:  LD   (HL),A
-  EA5B    CD E957                       CALL LE957
-  EA5E    18 DF                         JR   LEA3F
-                                ;
-  EA60    3D                    LEA60:  DEC  A
-  EA61    32 FFD0                       LD   (DFFD0),A
+  EA5A    77                    CON11:  LD   (HL),A
+  EA5B    CD E957                       CALL CPMMOD           ; CP/M Mode
+  EA5E    18 DF                         JR   CON10
+  EA60    3D                    CON12:  DEC  A
+  EA61    32 FFD0                       LD   (ZEIPUF),A
   EA64    7C                            LD   A,H
   EA65    21 FFD2                       LD   HL,0FFD2H
   EA68    11 FFD1                       LD   DE,0FFD1H
   EA6B    01 001F                       LD   BC,001FH
   EA6E    ED B0                         LDIR
-  EA70    CD EA7C                       CALL LEA7C
+  EA70    CD EA7C                       CALL CON20
   EA73    E1                            POP  HL
   EA74    D1                            POP  DE
   EA75    C1                            POP  BC
-  EA76    ED 7B F4D8                    LD   SP,(DF4D8)
+  EA76    ED 7B F4D8                    LD   SP,(SPCIN)
   EA7A    FB                            EI
   EA7B    C9                            RET
                                 ;
-  EA7C    FE 41                 LEA7C:  CP   41H
+  EA7C    FE 41                 CON20:  CP   41H
   EA7E    D8                            RET  C
   EA7F    D0                            RET  NC
   EA80    FE 5F                         CP   5FH
-  EA82    28 0B                         JR   Z,LEA8F
+  EA82    28 0B                         JR   Z,CON21
   EA84    C9                            RET
-	MACRO-80 3.44	09-Dec-81	PAGE	1-10
-
-
                                 ;Ansprung unklar
   EA85    FE 5E                 LEA85:  CP   5EH
-  EA87    38 06                         JR   C,LEA8F
+  EA87    38 06                         JR   C,CON21
   EA89    FE 61                         CP   61H
   EA8B    D8                            RET  C
   EA8C    FE 7E                         CP   7EH
   EA8E    D0                            RET  NC
-  EA8F    EE 20                 LEA8F:  XOR  20H
+  EA8F    EE 20                 CON21:  XOR  20H
   EA91    C9                            RET
+	MACRO-80 3.44	09-Dec-81	PAGE	1-11
+
+
+                                ;
+                                ;********************   LIST   PUNCH   (READER)   ***********
                                 ;
   EA92    C9                    LIST:   RET
                                 ;
   EA93    C9                    PUNCH:  RET
                                 ;
+                                ;******************************* CONOUT  *********************
+                                ;
+                                ;       ; Ausgabe eines Zeichens  ,   IN: Zeichen in C
+                                ;
   EA94    F3                    CONOUT: DI
-  EA95    ED 73 F4DA                    LD   (DF4DA),SP
-  EA99    31 F468                       LD   SP,0F468H
+  EA95    ED 73 F4DA                    LD   (SPCOUT),SP     ; Stack bei MON-Aufruf retten
+  EA99    31 F468                       LD   SP,COUTSP
   EA9C    F5                            PUSH AF
   EA9D    C5                            PUSH BC
   EA9E    D5                            PUSH DE
   EA9F    E5                            PUSH HL
-  EAA0    CD E95C                       CALL LE95C
+  EAA0    CD E95C                       CALL AC1MOD
   EAA3    E5                            PUSH HL
-  EAA4    2A 1800                       LD   HL,(D1800)
-  EAA7    3A F4D2                       LD   A,(DF4D2)
-  EAAA    77                            LD   (HL),A
-  EAAB    3A F4CF                       LD   A,(DF4CF)
+  EAA4    2A 1800                       LD   HL,(CUPOS)      ;Cursorposition
+  EAA7    3A F4D2                       LD   A,(CHAR)
+  EAAA    77                            LD   (HL),A          ;altes Zeichen auf Position
+  EAAB    3A F4CF                       LD   A,(STZ00)       ;Durchlauf bei Steuerzeichen?
   EAAE    A7                            AND  A
-  EAAF    C2 ECBE                       JP   NZ,LECBE
-  EAB2    79                            LD   A,C
-  EAB3    FE 20                         CP   20H
-  EAB5    38 27                         JR   C,LEADE
-  EAB7    FE 7F                         CP   7FH
-  EAB9    30 23                         JR   NC,LEADE
-  EABB    2A 1800                       LD   HL,(D1800)
-  EABE    C3 EC22                       JP   LEC22
+  EAAF    C2 ECBE                       JP   NZ,KONV10       ;NZ= Steuerzeichen 2. oder 3. Durchlauf
+  EAB2    79                            LD   A,C             ;Byte
+  EAB3    FE 20                         CP   20H             ;kleinstes Zeichen
+  EAB5    38 27                         JR   C,KONVTB
+  EAB7    FE 7F                         CP   7FH             ;groesstes Zeichen
+  EAB9    30 23                         JR   NC,KONVTB
+  EABB    2A 1800                       LD   HL,(CUPOS)
+  EABE    C3 EC22                       JP   CCHAR          ;Ausgabe einzelnes Zeichen
                                 ;
-  EAC1    2A 1800               LEAC1:  LD   HL,(D1800)
+  EAC1    2A 1800               KONVT9: LD   HL,(CUPOS)
   EAC4    7E                            LD   A,(HL)
-  EAC5    32 F4D2                       LD   (DF4D2),A
-  EAC8    3A F4CD                       LD   A,(DF4CD)
+  EAC5    32 F4D2                       LD   (CHAR),A
+  EAC8    3A F4CD                       LD   A,(CUFLAG)
   EACB    FE 01                         CP   01H
   EACD    20 02                         JR   NZ,LEAD1
   EACF    36 0F                         LD   (HL),0FH
-  EAD1    CD E957               LEAD1:  CALL LE957
+  EAD1    CD E957               LEAD1:  CALL CPMMOD
   EAD4    E1                            POP  HL
   EAD5    D1                            POP  DE
   EAD6    C1                            POP  BC
   EAD7    F1                            POP  AF
-  EAD8    ED 7B F4DA                    LD   SP,(DF4DA)
+  EAD8    ED 7B F4DA                    LD   SP,(SPCOUT)
   EADC    FB                            EI
   EADD    C9                            RET
                                 ;
-  EADE    FE 1B                 LEADE:  CP   1BH
-  EAE0    20 07                         JR   NZ,LEAE9
-  EAE2    3E 02                         LD   A,02H
-  EAE4    32 F4CF                       LD   (DF4CF),A
-  EAE7    18 D8                         JR   LEAC1
+                                ;       ; Verzweigung bei Steuerzeichen
+                                ;       ; INPUT:  A=Zeichen
                                 ;
-  EAE9    2A 1800               LEAE9:  LD   HL,(D1800)
-  EAEC    FE 01                         CP   01H
-  EAEE    28 60                         JR   Z,LEB50
-	MACRO-80 3.44	09-Dec-81	PAGE	1-11
-
-
-  EAF0    FE 08                         CP   08H
-  EAF2    CA EB78                       JP   Z,LEB78
-  EAF5    FE 0A                         CP   0AH
-  EAF7    CA EB7C                       JP   Z,LEB7C
-  EAFA    FE 0C                         CP   0CH
-  EAFC    28 5B                         JR   Z,LEB59
-  EAFE    FE 0D                         CP   0DH
-  EB00    CA EB94                       JP   Z,LEB94
-  EB03    FE 14                         CP   14H
-  EB05    CA EB9B                       JP   Z,LEB9B
-  EB08    FE 15                         CP   15H
-  EB0A    CA EBBE                       JP   Z,LEBBE
-  EB0D    FE 16                         CP   16H
-  EB0F    CA EBC2                       JP   Z,LEBC2
-  EB12    FE 18                         CP   18H
-  EB14    CA EBE9                       JP   Z,LEBE9
-  EB17    FE 1A                         CP   1AH
-  EB19    CA EC12                       JP   Z,LEC12
-  EB1C    47                            LD   B,A
-  EB1D    3A F4D3                       LD   A,(DF4D3)
-  EB20    A7                            AND  A
-  EB21    CA EAC1                       JP   Z,LEAC1
-  EB24    78                            LD   A,B
-  EB25    FE 02                         CP   02H
-  EB27    CA ECAF                       JP   Z,LECAF
-  EB2A    FE 82                         CP   82H
-  EB2C    CA ECAF                       JP   Z,LECAF
-  EB2F    FE 03                         CP   03H
-  EB31    CA ECB7                       JP   Z,LECB7
-  EB34    FE 83                         CP   83H
-  EB36    CA ECB7                       JP   Z,LECB7
-  EB39    FE 84                         CP   84H
-  EB3B    CA EC74                       JP   Z,LEC74
-  EB3E    FE 85                         CP   85H
-  EB40    CA EC82                       JP   Z,LEC82
-  EB43    FE 86                         CP   86H
-  EB45    CA EC91                       JP   Z,LEC91
-  EB48    FE 87                         CP   87H
-  EB4A    CA EC9E                       JP   Z,LEC9E
-  EB4D    C3 EAC1                       JP   LEAC1
+  EADE    FE 1B                 KONVTB: CP   1BH            ; ESC ?
+  EAE0    20 07                         JR   NZ,KONVT1
+  EAE2    3E 02                         LD   A,02H          ;wenn ja
+  EAE4    32 F4CF                       LD   (STZ00),A      ;Zeiger auf 2
+  EAE7    18 D8                         JR   KONVT9         ;nichts ausgeben
                                 ;
-  EB50    21 17FF               LEB50:  LD   HL,17FFH
-  EB53    22 1800                       LD   (D1800),HL
-  EB56    C3 EAC1                       JP   LEAC1
-                                ;
-  EB59    3E 20                 LEB59:  LD   A,20H
-  EB5B    CD EB85                       CALL LEB85
-  EB5E    22 1800                       LD   (D1800),HL
-  EB61    3A F4D3                       LD   A,(DF4D3)
-  EB64    E6 77                         AND  77H
-  EB66    CA EAC1                       JP   Z,LEAC1
-  EB69    CD ED41                       CALL LED41
-  EB6C    3A F4D3                       LD   A,(DF4D3)
-  EB6F    CD EB85                       CALL LEB85
-  EB72    CD ED47                       CALL LED47
-  EB75    C3 EAC1                       JP   LEAC1
-                                ;
-  EB78    23                    LEB78:  INC  HL
-  EB79    C3 EC16                       JP   LEC16
-                                ;
-  EB7C    11 0040               LEB7C:  LD   DE,0040H
-  EB7F    A7                            AND  A
+  EAE9    2A 1800               KONVT1: LD   HL,(CUPOS)
+  EAEC    FE 01                         CP   01H            ;Cursor home
+  EAEE    28 60                         JR   Z,CHOME
 	MACRO-80 3.44	09-Dec-81	PAGE	1-12
 
 
-  EB80    ED 52                         SBC  HL,DE
-  EB82    C3 EC33                       JP   LEC33
+  EAF0    FE 08                         CP   08H            ;Cursor links
+  EAF2    CA EB78                       JP   Z,CLEFT
+  EAF5    FE 0A                         CP   0AH            ;Zeilenvorschub
+  EAF7    CA EB7C                       JP   Z,CLF
+  EAFA    FE 0C                         CP   0CH            ; CLS
+  EAFC    28 5B                         JR   Z,BCLS
+  EAFE    FE 0D                         CP   0DH            ;Wagenruecklauf
+  EB00    CA EB94                       JP   Z,CCRET
+  EB03    FE 14                         CP   14H            ;BS ab Cursor loeschen
+  EB05    CA EB9B                       JP   Z,CBLOE
+  EB08    FE 15                         CP   15H            ;Cursor nach rechts
+  EB0A    CA EBBE                       JP   Z,CRIGH
+  EB0D    FE 16                         CP   16H            ;Zeile ab Cursor loeschen
+  EB0F    CA EBC2                       JP   Z,CZLOE
+  EB12    FE 18                         CP   18H            ;Zeile ab Cursor loeschen + CR
+  EB14    CA EBE9                       JP   Z,CZLCR
+  EB17    FE 1A                         CP   1AH            ;Cursor hoch
+  EB19    CA EC12                       JP   Z,CHOCH
+  EB1C    47                            LD   B,A            ;Zeichen merken
+  EB1D    3A F4D3                       LD   A,(COLOR)
+  EB20    A7                            AND  A              ;Test auf Color-BWS
+  EB21    CA EAC1                       JP   Z,KONVT9       ;Z = monochrom
+  EB24    78                            LD   A,B
+  EB25    FE 02                         CP   02H
+  EB27    CA ECAF                       JP   Z,CUON
+  EB2A    FE 82                         CP   82H
+  EB2C    CA ECAF                       JP   Z,CUON
+  EB2F    FE 03                         CP   03H
+  EB31    CA ECB7                       JP   Z,CUOFF
+  EB34    FE 83                         CP   83H
+  EB36    CA ECB7                       JP   Z,CUOFF
+  EB39    FE 84                         CP   84H            ;normale Darstellung
+  EB3B    CA EC74                       JP   Z,BNORM
+  EB3E    FE 85                         CP   85H            ;invers
+  EB40    CA EC82                       JP   Z,BINVN
+  EB43    FE 86                         CP   86H            ;intensiv - HihgLight
+  EB45    CA EC91                       JP   Z,BINTE
+  EB48    FE 87                         CP   87H            ;intensiv + invers
+  EB4A    CA EC9E                       JP   Z,BIVIN
+  EB4D    C3 EAC1                       JP   KONVT9
                                 ;
-  EB85    21 1000               LEB85:  LD   HL,1000H
+  EB50    21 17FF               CHOME:  LD   HL,17FFH
+  EB53    22 1800                       LD   (CUPOS),HL
+  EB56    C3 EAC1                       JP   KONVT9
+                                ;
+  EB59    3E 20                 BCLS:   LD   A,20H          ;0Ch    Bildschirm loeschen
+  EB5B    CD EB85                       CALL BCL1           ;Loeschroutine
+  EB5E    22 1800                       LD   (CUPOS),HL     ;Cursorposition
+  EB61    3A F4D3                       LD   A,(COLOR)      ;Farbbyte
+  EB64    E6 77                         AND  77H            ;Farb-BWS vorhanden?
+  EB66    CA EAC1                       JP   Z,KONVT9       ;Z = nein, dann Ende
+  EB69    CD ED41                       CALL BWSCOL         ;Farbspeicher ein
+  EB6C    3A F4D3                       LD   A,(COLOR)
+  EB6F    CD EB85                       CALL BCL1
+  EB72    CD ED47                       CALL BWSZEI         ;Farbspeicher aus
+  EB75    C3 EAC1                       JP   KONVT9
+                                ;
+  EB78    23                    CLEFT:  INC  HL             ;08h     Cursor links
+  EB79    C3 EC16                       JP   CHOLI
+                                ;
+  EB7C    11 0040               CLF:    LD   DE,0040H       ;0Ah     Zeilenvorschub
+  EB7F    A7                            AND  A
+	MACRO-80 3.44	09-Dec-81	PAGE	1-13
+
+
+  EB80    ED 52                         SBC  HL,DE
+  EB82    C3 EC33                       JP   SCROL
+                                ;
+  EB85    21 1000               BCL1:   LD   HL,1000H       ;Anfang BWS
   EB88    77                            LD   (HL),A
   EB89    54                            LD   D,H
   EB8A    5D                            LD   E,L
   EB8B    1C                            INC  E
   EB8C    C5                            PUSH BC
-  EB8D    01 07FF                       LD   BC,07FFH
+  EB8D    01 07FF                       LD   BC,07FFH       ;Laenge BWS
   EB90    ED B0                         LDIR
   EB92    C1                            POP  BC
   EB93    C9                            RET
                                 ;
-  EB94    7D                    LEB94:  LD   A,L
+  EB94    7D                    CCRET:  LD   A,L            ;0Dh     Wagenruecklauf
   EB95    F6 3F                         OR   3FH
   EB97    6F                            LD   L,A
-  EB98    C3 EC33                       JP   LEC33
+  EB98    C3 EC33                       JP   SCROL
                                 ;
-  EB9B    E5                    LEB9B:  PUSH HL
-  EB9C    3E 0F                         LD   A,0FH
-  EB9E    36 20                 LEB9E:  LD   (HL),20H
+  EB9B    E5                    CBLOE:  PUSH HL
+  EB9C    3E 0F                         LD   A,0FH          ;14h     BS ab Cursor loeschen
+  EB9E    36 20                 CBLO1:  LD   (HL),20H
   EBA0    2B                            DEC  HL
   EBA1    BC                            CP   H
-  EBA2    20 FA                         JR   NZ,LEB9E
+  EBA2    20 FA                         JR   NZ,CBLO1
   EBA4    E1                            POP  HL
-  EBA5    3A F4D3                       LD   A,(DF4D3)
+  EBA5    3A F4D3                       LD   A,(COLOR)
   EBA8    47                            LD   B,A
   EBA9    E6 77                         AND  77H
-  EBAB    CA EAC1                       JP   Z,LEAC1
-  EBAE    CD ED41                       CALL LED41
+  EBAB    CA EAC1                       JP   Z,KONVT9
+  EBAE    CD ED41                       CALL BWSCOL          ;Farbspeicher ein
   EBB1    3E 0F                         LD   A,0FH
-  EBB3    70                    LEBB3:  LD   (HL),B
+  EBB3    70                    CBLO2:  LD   (HL),B
   EBB4    2B                            DEC  HL
   EBB5    BC                            CP   H
-  EBB6    20 FB                         JR   NZ,LEBB3
-  EBB8    CD ED47                       CALL LED47
-  EBBB    C3 EAC1                       JP   LEAC1
+  EBB6    20 FB                         JR   NZ,CBLO2
+  EBB8    CD ED47                       CALL BWSZEI          ;Farbspeicher aus
+  EBBB    C3 EAC1                       JP   KONVT9
                                 ;
-  EBBE    2B                    LEBBE:  DEC  HL
-  EBBF    C3 EC33                       JP   LEC33
+  EBBE    2B                    CRIGH:  DEC  HL              ;15h     Cursor nach rechts
+  EBBF    C3 EC33                       JP   SCROL
                                 ;
-  EBC2    E5                    LEBC2:  PUSH HL
+  EBC2    E5                    CZLOE:  PUSH HL              ;16h   Zeile ab Cursor loeschen
   EBC3    7D                            LD   A,L
   EBC4    E6 3F                         AND  3FH
   EBC6    47                            LD   B,A
   EBC7    04                            INC  B
-  EBC8    36 20                 LEBC8:  LD   (HL),20H
+  EBC8    36 20                 CZLO1:  LD   (HL),20H
   EBCA    2B                            DEC  HL
-  EBCB    10 FB                         DJNZ LEBC8
+  EBCB    10 FB                         DJNZ CZLO1
   EBCD    E1                            POP  HL
-  EBCE    3A F4D3                       LD   A,(DF4D3)
+  EBCE    3A F4D3                       LD   A,(COLOR)
   EBD1    4F                            LD   C,A
   EBD2    E6 77                         AND  77H
-  EBD4    CA EAC1                       JP   Z,LEAC1
-  EBD7    CD ED41                       CALL LED41
+  EBD4    CA EAC1                       JP   Z,KONVT9
+  EBD7    CD ED41                       CALL BWSCOL          ;Farbspeicher ein
   EBDA    7D                            LD   A,L
   EBDB    E6 3F                         AND  3FH
   EBDD    47                            LD   B,A
   EBDE    04                            INC  B
-  EBDF    71                    LEBDF:  LD   (HL),C
+  EBDF    71                    CZLO2:  LD   (HL),C
   EBE0    2B                            DEC  HL
-	MACRO-80 3.44	09-Dec-81	PAGE	1-13
-
-
-  EBE1    10 FC                         DJNZ LEBDF
-  EBE3    CD ED47                       CALL LED47
-  EBE6    C3 EAC1                       JP   LEAC1
-                                ;
-  EBE9    E5                    LEBE9:  PUSH HL
-  EBEA    7D                            LD   A,L
-  EBEB    F6 3F                         OR   3FH
-  EBED    6F                            LD   L,A
-  EBEE    22 1800                       LD   (D1800),HL
-  EBF1    E5                            PUSH HL
-  EBF2    06 40                         LD   B,40H
-  EBF4    36 20                 LEBF4:  LD   (HL),20H
-  EBF6    2B                            DEC  HL
-  EBF7    10 FB                         DJNZ LEBF4
-  EBF9    E1                            POP  HL
-  EBFA    3A F4D3                       LD   A,(DF4D3)
-  EBFD    4F                            LD   C,A
-  EBFE    E6 77                         AND  77H
-  EC00    CA EAC1                       JP   Z,LEAC1
-  EC03    CD ED41                       CALL LED41
-  EC06    06 40                         LD   B,40H
-  EC08    71                    LEC08:  LD   (HL),C
-  EC09    2B                            DEC  HL
-  EC0A    10 FC                         DJNZ LEC08
-  EC0C    CD ED47                       CALL LED47
-  EC0F    C3 EAC1                       JP   LEAC1
-                                ;
-  EC12    11 0040               LEC12:  LD   DE,0040H
-  EC15    19                            ADD  HL,DE
-  EC16    3E 18                 LEC16:  LD   A,18H
-  EC18    BC                            CP   H
-  EC19    CA EAC1                       JP   Z,LEAC1
-  EC1C    22 1800                       LD   (D1800),HL
-  EC1F    C3 EAC1                       JP   LEAC1
-                                ;
-  EC22    77                    LEC22:  LD   (HL),A
-  EC23    3A F4D3                       LD   A,(DF4D3)
-  EC26    4F                            LD   C,A
-  EC27    E6 77                         AND  77H
-  EC29    28 07                         JR   Z,LEC32
-  EC2B    CD ED41                       CALL LED41
-  EC2E    71                            LD   (HL),C
-  EC2F    CD ED47                       CALL LED47
-  EC32    2B                    LEC32:  DEC  HL
-  EC33    22 1800               LEC33:  LD   (D1800),HL
-  EC36    EB                            EX   DE,HL
-  EC37    21 0FFF                       LD   HL,0FFFH
-  EC3A    A7                            AND  A
-  EC3B    ED 52                         SBC  HL,DE
-  EC3D    EB                            EX   DE,HL
-  EC3E    DA EAC1                       JP   C,LEAC1
-  EC41    3E 20                         LD   A,20H
-  EC43    CD EC5D                       CALL LEC5D
-  EC46    3A F4D3                       LD   A,(DF4D3)
-  EC49    E6 77                         AND  77H
-  EC4B    CA EAC1                       JP   Z,LEAC1
-  EC4E    CD ED41                       CALL LED41
-  EC51    3A F4D3                       LD   A,(DF4D3)
-  EC54    CD EC5D                       CALL LEC5D
-  EC57    CD ED47                       CALL LED47
-  EC5A    C3 EAC1                       JP   LEAC1
-                                ;
 	MACRO-80 3.44	09-Dec-81	PAGE	1-14
 
 
-  EC5D    21 17BF               LEC5D:  LD   HL,17BFH
+  EBE1    10 FC                         DJNZ CZLO2
+  EBE3    CD ED47                       CALL BWSZEI          ;Farbspeicher aus
+  EBE6    C3 EAC1                       JP   KONVT9
+                                ;
+  EBE9    E5                    CZLCR:  PUSH HL              ;18h   Zeile ab Cursor loeschen + CR
+  EBEA    7D                            LD   A,L
+  EBEB    F6 3F                         OR   3FH
+  EBED    6F                            LD   L,A
+  EBEE    22 1800                       LD   (CUPOS),HL
+  EBF1    E5                            PUSH HL
+  EBF2    06 40                         LD   B,40H           ;Zeilenlaenge
+  EBF4    36 20                 CZLC1:  LD   (HL),20H
+  EBF6    2B                            DEC  HL
+  EBF7    10 FB                         DJNZ CZLC1
+  EBF9    E1                            POP  HL
+  EBFA    3A F4D3                       LD   A,(COLOR)
+  EBFD    4F                            LD   C,A
+  EBFE    E6 77                         AND  77H
+  EC00    CA EAC1                       JP   Z,KONVT9
+  EC03    CD ED41                       CALL BWSCOL          ;Farbspeicher ein
+  EC06    06 40                         LD   B,40H
+  EC08    71                    CZLC2:  LD   (HL),C
+  EC09    2B                            DEC  HL
+  EC0A    10 FC                         DJNZ CZLC2
+  EC0C    CD ED47                       CALL BWSZEI          ;Farbspeicher aus
+  EC0F    C3 EAC1                       JP   KONVT9
+                                ;
+  EC12    11 0040               CHOCH:  LD   DE,0040H        ;1Ah     Cursor hoch
+  EC15    19                            ADD  HL,DE
+                                ;
+  EC16    3E 18                 CHOLI:  LD   A,18H           ;Begrenzung Cursor hoch und links
+  EC18    BC                            CP   H
+  EC19    CA EAC1                       JP   Z,KONVT9
+  EC1C    22 1800                       LD   (CUPOS),HL
+  EC1F    C3 EAC1                       JP   KONVT9
+                                ;
+  EC22    77                    CCHAR:  LD   (HL),A
+  EC23    3A F4D3                       LD   A,(COLOR)
+  EC26    4F                            LD   C,A
+  EC27    E6 77                         AND  77H
+  EC29    28 07                         JR   Z,CCHA1
+  EC2B    CD ED41                       CALL BWSCOL
+  EC2E    71                            LD   (HL),C
+  EC2F    CD ED47                       CALL BWSZEI
+  EC32    2B                    CCHA1:  DEC  HL
+                                ;
+  EC33    22 1800               SCROL:  LD   (CUPOS),HL
+  EC36    EB                            EX   DE,HL             ;Test ob Scrollen noetig
+  EC37    21 0FFF                       LD   HL,0FFFH
+  EC3A    A7                            AND  A
+  EC3B    ED 52                         SBC  HL,DE             ;DE = akt. Cursorpos.
+  EC3D    EB                            EX   DE,HL
+  EC3E    DA EAC1                       JP   C,KONVT9          ;CY = nicht scrollen
+  EC41    3E 20                         LD   A,20H             ;Leerzeichen
+  EC43    CD EC5D                       CALL SCR11             ;Scrollen
+  EC46    3A F4D3                       LD   A,(COLOR)
+  EC49    E6 77                         AND  77H
+  EC4B    CA EAC1                       JP   Z,KONVT9          ;Z = kein Farbspeicher
+  EC4E    CD ED41                       CALL BWSCOL            ;Farbspeicher ein
+  EC51    3A F4D3                       LD   A,(COLOR)         ;Farbbyte
+  EC54    CD EC5D                       CALL SCR11
+  EC57    CD ED47                       CALL BWSZEI            ;Farbspeicher aus
+	MACRO-80 3.44	09-Dec-81	PAGE	1-15
+
+
+  EC5A    C3 EAC1                       JP   KONVT9
+                                ;
+  EC5D    21 17BF               SCR11:  LD   HL,17BFH          ;Umladeroutine Scrollen
   EC60    11 17FF                       LD   DE,17FFH
   EC63    01 07C0                       LD   BC,07C0H
   EC66    ED B8                         LDDR
   EC68    EB                            EX   DE,HL
-  EC69    22 1800                       LD   (D1800),HL
+  EC69    22 1800                       LD   (CUPOS),HL
   EC6C    23                            INC  HL
-  EC6D    06 40                         LD   B,40H
-  EC6F    2D                    LEC6F:  DEC  L
-  EC70    77                            LD   (HL),A
-  EC71    10 FC                         DJNZ LEC6F
+  EC6D    06 40                         LD   B,40H             ;eine Zeilenlaenge
+  EC6F    2D                    SCR12:  DEC  L
+  EC70    77                            LD   (HL),A            ;Leerzeile schreiben
+  EC71    10 FC                         DJNZ SCR12
   EC73    C9                            RET
                                 ;
-  EC74    3A F4D4               LEC74:  LD   A,(DF4D4)
+  EC74    3A F4D4               BNORM:  LD   A,(COLO1)         ;84h    normale Darstellung
   EC77    E6 77                         AND  77H
-  EC79    32 F4D3                       LD   (DF4D3),A
-  EC7C    32 F4D4                       LD   (DF4D4),A
-  EC7F    C3 EAC1                       JP   LEAC1
+  EC79    32 F4D3                       LD   (COLOR),A
+  EC7C    32 F4D4                       LD   (COLO1),A
+  EC7F    C3 EAC1                       JP   KONVT9
                                 ;
-  EC82    3A F4D4               LEC82:  LD   A,(DF4D4)
+  EC82    3A F4D4               BINVN:  LD   A,(COLO1)         ;85    invers EIN
   EC85    E6 77                         AND  77H
   EC87    0F                            RRCA
   EC88    0F                            RRCA
   EC89    0F                            RRCA
   EC8A    0F                            RRCA
-  EC8B    32 F4D3                       LD   (DF4D3),A
-  EC8E    C3 EAC1                       JP   LEAC1
+  EC8B    32 F4D3                       LD   (COLOR),A
+  EC8E    C3 EAC1                       JP   KONVT9
                                 ;
-  EC91    3A F4D4               LEC91:  LD   A,(DF4D4)
+  EC91    3A F4D4               BINTE:  LD   A,(COLO1)         ;86h    intensiv EIN
   EC94    E6 77                         AND  77H
   EC96    F6 08                         OR   08H
-  EC98    32 F4D3                       LD   (DF4D3),A
-  EC9B    C3 EAC1                       JP   LEAC1
+  EC98    32 F4D3                       LD   (COLOR),A
+  EC9B    C3 EAC1                       JP   KONVT9
                                 ;
-  EC9E    3A F4D3               LEC9E:  LD   A,(DF4D3)
+  EC9E    3A F4D3               BIVIN:  LD   A,(COLOR)         ;87h    intensiv + invers
   ECA1    E6 77                         AND  77H
   ECA3    F6 08                         OR   08H
   ECA5    0F                            RRCA
   ECA6    0F                            RRCA
   ECA7    0F                            RRCA
   ECA8    0F                            RRCA
-  ECA9    32 F4D3                       LD   (DF4D3),A
-  ECAC    C3 EAC1                       JP   LEAC1
+  ECA9    32 F4D3                       LD   (COLOR),A
+  ECAC    C3 EAC1                       JP   KONVT9
                                 ;
-  ECAF    3E 01                 LECAF:  LD   A,01H
-  ECB1    32 F4CD                       LD   (DF4CD),A
-  ECB4    C3 EAC1                       JP   LEAC1
+  ECAF    3E 01                 CUON:   LD   A,01H              ;82h   Cursor EIN
+  ECB1    32 F4CD                       LD   (CUFLAG),A
+  ECB4    C3 EAC1                       JP   KONVT9
                                 ;
-  ECB7    AF                    LECB7:  XOR  A
-  ECB8    32 F4CD                       LD   (DF4CD),A
-  ECBB    C3 EAC1                       JP   LEAC1
+  ECB7    AF                    CUOFF:  XOR  A                  ;83h  Cursor AUS
+  ECB8    32 F4CD                       LD   (CUFLAG),A
+  ECBB    C3 EAC1                       JP   KONVT9
                                 ;
-  ECBE    3A F4CF               LECBE:  LD   A,(DF4CF)
-  ECC1    FE 02                         CP   02H
-  ECC3    20 0C                         JR   NZ,LECD1
+                                ; Behandlung ESC-Sequenzen
+                                ;
+                                ; Input: ESC + 2 Steuerzeichen
+                                ; wenn 1. Zeichen > 80h dann Cursorposition
+                                ; sonst Auswertung Farbe / Grafikzeichen
+                                ; (stz00) = Zaehler fuer Zeichenanzahl
+                                ;
+  ECBE    3A F4CF               KONV10: LD   A,(STZ00)
+	MACRO-80 3.44	09-Dec-81	PAGE	1-16
+
+
+  ECC1    FE 02                         CP   02H             ;2 = 1. Steuerzeichen (Zeile)
+  ECC3    20 0C                         JR   NZ,KONV20       ;sonst 3. Durchlauf (Spalte)
   ECC5    79                            LD   A,C
-  ECC6    32 F4D0                       LD   (DF4D0),A
-  ECC9    3E 01                         LD   A,01H
-  ECCB    32 F4CF                       LD   (DF4CF),A
-  ECCE    C3 EAC1                       JP   LEAC1
+  ECC6    32 F4D0                       LD   (STZ01),A       ;erstes Zeichen merken
+  ECC9    3E 01                         LD   A,01H           ;Zeiger fuer 3. Durchlauf
+  ECCB    32 F4CF                       LD   (STZ00),A
+  ECCE    C3 EAC1                       JP   KONVT9          ;nichts ausgeben
                                 ;
-  ECD1    79                    LECD1:  LD   A,C
-	MACRO-80 3.44	09-Dec-81	PAGE	1-15
-
-
-  ECD2    32 F4D1                       LD   (DF4D1),A
+                                ; Verzweigung Cursorposition / weitere Funktionen
+                                ;
+  ECD1    79                    KONV20: LD   A,C
+  ECD2    32 F4D1                       LD   (STZ02),A       ;zweites Zeichen merken
   ECD5    AF                            XOR  A
-  ECD6    32 F4CF                       LD   (DF4CF),A
-  ECD9    21 F4D0                       LD   HL,0F4D0H
+  ECD6    32 F4CF                       LD   (STZ00),A       ;Durchlaufzaehler ruecksetzen
+  ECD9    21 F4D0                       LD   HL,STZ01
   ECDC    7E                            LD   A,(HL)
-  ECDD    CB 7F                         BIT  7,A
-  ECDF    28 2F                         JR   Z,LED10
+  ECDD    CB 7F                         BIT  7,A             ;welche Funktion? NZ = Cursor
+  ECDF    28 2F                         JR   Z,KONV22        ;Z = weitere Funktionen
+                                
+                                ; Berechnung direkte Cursorposition
+                                ; OUT:    HL = BWS-Adresse
+                                ;
   ECE1    F5                            PUSH AF
   ECE2    79                            LD   A,C
-  ECE3    E6 3F                         AND  3FH
+  ECE3    E6 3F                         AND  3FH             ;max. Spaltenzahl
   ECE5    6F                            LD   L,A
   ECE6    F1                            POP  AF
-  ECE7    E6 1F                         AND  1FH
+  ECE7    E6 1F                         AND  1FH             ;max. Zeilenzahl
   ECE9    16 00                         LD   D,00H
   ECEB    62                            LD   H,D
   ECEC    5F                            LD   E,A
   ECED    06 06                         LD   B,06H
-  ECEF    CB 23                 LECEF:  SLA  E
+  ECEF    CB 23                 KONV21: SLA  E
   ECF1    CB 12                         RL   D
-  ECF3    10 FA                         DJNZ LECEF
+  ECF3    10 FA                         DJNZ KONV21
   ECF5    19                            ADD  HL,DE
   ECF6    EB                            EX   DE,HL
-  ECF7    21 17FF                       LD   HL,17FFH
+  ECF7    21 17FF                       LD   HL,17FFH         ;Ende BWS-RAM
   ECFA    A7                            AND  A
   ECFB    ED 52                         SBC  HL,DE
+                                ;
+                                ; Cursor direkt positionieren
+                                ; IN:    HL = Adresse Cursor
+                                ;
   ECFD    E5                            PUSH HL
-  ECFE    2A                            DEFB 2AH          ;LD HL,XXXX ??
-  ECFF    00                            NOP
-  ED00    18 3A                         JR   LED3C
-                                ;Ansprung unklar
-  ED02    D2 77F4               LED02:  JP   NC,L77F4
+  ECFE    2A 1800                       LD   HL,(CUPOS)	      ;alte Position
+  ED01    3A F4D2                       LD   A,(CHAR)	      ;Zeichen holen
+  ED04    77                            LD   (HL),A	      ;auf BS schreiben
   ED05    E1                            POP  HL
-  ED06    22 1800                       LD   (D1800),HL
-  ED09    7E                            LD   A,(HL)
-  ED0A    32 F4D2                       LD   (DF4D2),A
-  ED0D    C3 EAC1                       JP   LEAC1
+  ED06    22 1800                       LD   (CUPOS),HL       ;neue Position setzen
+  ED09    7E                            LD   A,(HL)           ;neues Zeichen holen
+  ED0A    32 F4D2                       LD   (CHAR),A         ;und merken
+  ED0D    C3 EAC1                       JP   KONVT9
                                 ;
-  ED10    FE 5F                 LED10:  CP   5FH
-  ED12    20 08                         JR   NZ,LED1C
+                                ; Auswertung weiterer ESC-Funktionen
+                                ; IN:      A = 1. Steuerzeichen
+                                ;
+                                ; Ausgabe Grafikzeichen aus AC1-ZG ( > 80h )
+                                ;
+  ED10    FE 5F                 KONV22: CP   5FH               ;Grafikzeichen?
+  ED12    20 08                         JR   NZ,KONV24         ;NZ = nein
   ED14    23                            INC  HL
-  ED15    7E                            LD   A,(HL)
-  ED16    2A 1800                       LD   HL,(D1800)
-  ED19    C3 EC22                       JP   LEC22
+	MACRO-80 3.44	09-Dec-81	PAGE	1-17
+
+
+  ED15    7E                            LD   A,(HL)            ;2. Zeichen holen
+  ED16    2A 1800                       LD   HL,(CUPOS)
+  ED19    C3 EC22                       JP   CCHAR             ;Zeichen ausgeben
                                 ;
-  ED1C    FE 5D                 LED1C:  CP   5DH
-  ED1E    C2 EAC1                       JP   NZ,LEAC1
-  ED21    3A F4D3                       LD   A,(DF4D3)
+                                ; Einstellen der Farbe (nur Color-BWS)
+                                ;
+  ED1C    FE 5D                 KONV24: CP   5DH               ;Farbe?
+  ED1E    C2 EAC1                       JP   NZ,KONVT9         ;NZ = nein
+  ED21    3A F4D3                       LD   A,(COLOR)         ;Color-BWS?
   ED24    A7                            AND  A
-  ED25    CA EAC1                       JP   Z,LEAC1
+  ED25    CA EAC1                       JP   Z,KONVT9          ;Z = nein
   ED28    23                            INC  HL
-  ED29    7E                            LD   A,(HL)
-  ED2A    E6 77                         AND  77H
+  ED29    7E                            LD   A,(HL)            ;2. Zeichen holen
+  ED2A    E6 77                         AND  77H               ;intensiv maskieren
   ED2C    47                            LD   B,A
   ED2D    0F                            RRCA
   ED2E    0F                            RRCA
   ED2F    0F                            RRCA
   ED30    0F                            RRCA
-  ED31    B8                            CP   B
-  ED32    CA EAC1                       JP   Z,LEAC1
+  ED31    B8                            CP   B                 ;Zeichen- und HG-Farbe gleich?
+  ED32    CA EAC1                       JP   Z,KONVT9          ;Z = Ja, dann ignorieren
   ED35    78                            LD   A,B
-  ED36    32 F4D3                       LD   (DF4D3),A
-  ED39    E6 77                         AND  77H
-	MACRO-80 3.44	09-Dec-81	PAGE	1-16
-
-
-  ED3B    32 F4D4                       LD   (DF4D4),A
-  ED3E    C3 EAC1                       JP   LEAC1
+  ED36    32 F4D3                       LD   (COLOR),A         ;Farbe setzen
+  ED39    E6 77                         AND  77H               ;intensiv maskieren
+  ED3B    32 F4D4                       LD   (COLO1),A         ;Backup
+  ED3E    C3 EAC1                       JP   KONVT9
                                 ;
-  ED41    DB F0                 LED41:  IN   A,(PF0)
-  ED43    CB D7                         SET  2,A
-  ED45    18 04                         JR   LED4B
+  ED41    DB F0                 BWSCOL: IN   A,(PF0)           ; bwsport
+  ED43    CB D7                         SET  2,A               ;Farbspeicher ein
+  ED45    18 04                         JR   BWSZ1
                                 ;
-  ED47    DB F0                 LED47:  IN   A,(PF0)
-  ED49    CB 97                         RES  2,A
-  ED4B    E6 07                 LED4B:  AND  07H
+  ED47    DB F0                 BWSZEI: IN   A,(PF0)           ; bwsport
+  ED49    CB 97                         RES  2,A               ;Farbspeicher aus
+  ED4B    E6 07                 BWSZ1:  AND  07H
   ED4D    D3 F0                         OUT  (PF0),A
   ED4F    C9                            RET
                                 ;
-  ED50    AF                    LED50:  XOR  A
-  ED51    32 F4D5                       LD   (DF4D5),A
-  ED54    3A 181F                       LD   A,(D181F)
+  ED50    AF                    BWSINI: XOR  A
+  ED51    32 F4D5                       LD   (COLO2),A
+  ED54    3A 181F                       LD   A,(CBWSB)       ; Farbmerkzelle, 0= mono
   ED57    E6 0F                         AND  0FH
-  ED59    0E F0                         LD   C,0F0H
+  ED59    0E F0                         LD   C,0F0H          ; C-BWS-Port
   ED5B    ED 40                         IN   B,(C)
   ED5D    04                            INC  B
-  ED5E    C8                            RET  Z
+  ED5E    C8                            RET  Z               ; Z = kein Color-BWS
   ED5F    05                            DEC  B
   ED60    50                            LD   D,B
-  ED61    CB D2                         SET  2,D
+  ED61    CB D2                         SET  2,D              ; Farb-RAM-Bit setzen
   ED63    21 1000                       LD   HL,1000H
-  ED66    5E                            LD   E,(HL)
-  ED67    ED 51                         OUT  (C),D
+  ED66    5E                            LD   E,(HL)        ; Zeichen aus unt.-li. Ecke
+  ED67    ED 51                         OUT  (C),D         ; Farb-RAM einschalten
   ED69    77                            LD   (HL),A
-  ED6A    BE                            CP   (HL)
-  ED6B    ED 41                         OUT  (C),B
+  ED6A    BE                            CP   (HL)          ; ist Farb-RAM eingebaut?
+  ED6B    ED 41                         OUT  (C),B         ; Farb-RAM ausschalten
   ED6D    73                            LD   (HL),E
-  ED6E    C0                            RET  NZ
-  ED6F    ED 51                         OUT  (C),D
+  ED6E    C0                            RET  NZ            ; Z = Farb-RAM ok
+  ED6F    ED 51                         OUT  (C),D         ; Farb-RAM einschalten
   ED71    C5                            PUSH BC
   ED72    11 1001                       LD   DE,1001H
   ED75    01 07FF                       LD   BC,07FFH
-  ED78    ED B0                         LDIR
+  ED78    ED B0                         LDIR               ; Farb-RAM loeschen
   ED7A    7E                            LD   A,(HL)
+	MACRO-80 3.44	09-Dec-81	PAGE	1-18
+
+
   ED7B    C1                            POP  BC
-  ED7C    ED 41                         OUT  (C),B
-  ED7E    32 F4D5                       LD   (DF4D5),A
+  ED7C    ED 41                         OUT  (C),B         ; Farb-RAM ausschalten
+  ED7E    32 F4D5                       LD   (COLO2),A
   ED81    C9                            RET
+                                ;
+                                ;+++++++++++++++++++++++++++++   Ende CONOUT  ++++++++++++++++
+                                ;
                                 ;Ansprung unklar
   ED82    AF                    LED82:  XOR  A
   ED83    3D                            DEC  A
@@ -1103,9 +1198,6 @@
   ED97    09                            ADD  HL,BC        ;DPHX + (2 * LW)
   ED98    5E                            LD   E,(HL)
   ED99    23                            INC  HL
-	MACRO-80 3.44	09-Dec-81	PAGE	1-17
-
-
   ED9A    56                            LD   D,(HL)
   ED9B    EB                            EX   DE,HL
   ED9C    7C                            LD   A,H
@@ -1141,6 +1233,9 @@
   EDC5    0E 02                 READ:   LD   C,02H
   EDC7    3E 04                         LD   A,04H
   EDC9    21                            DEFB 21H          ;LD HL,063EH mit nxt. Befehl!!!
+	MACRO-80 3.44	09-Dec-81	PAGE	1-19
+
+
   EDCA    3E 06                 WRITE:  LD   A,06H
   EDCC    32 F4FB                       LD   (DF4FB),A    ;hier geht es fuer READ weiter!
   EDCF    79                            LD   A,C
@@ -1168,59 +1263,59 @@
   EDEE    3E 01                         LD   A,01H
   EDF0    C9                            RET
                                 ;
-	MACRO-80 3.44	09-Dec-81	PAGE	1-18
-
-
   EDF1    4E                    LEDF1:  LD   C,(HL)
   EDF2    23                            INC  HL
   EDF3    23                            INC  HL
   EDF4    7E                            LD   A,(HL)
-  EDF5    32 F4C2                       LD   (DF4C2),A
+  EDF5    32 F4C2                       LD   (RAFTRK),A
   EDF8    23                            INC  HL
   EDF9    7E                            LD   A,(HL)
   EDFA    A7                            AND  A
-  EDFB    20 4D                         JR   NZ,LEE4A
+  EDFB    20 4D                         JR   NZ,RDERR
   EDFD    23                            INC  HL
   EDFE    7E                            LD   A,(HL)
-  EDFF    32 F4C3                       LD   (DF4C3),A
+  EDFF    32 F4C3                       LD   (RAFSEC),A
   EE02    CB 7F                         BIT  7,A
-  EE04    20 44                         JR   NZ,LEE4A
+  EE04    20 44                         JR   NZ,RDERR
   EE06    23                            INC  HL
   EE07    7E                            LD   A,(HL)
   EE08    A7                            AND  A
-  EE09    20 3F                         JR   NZ,LEE4A
+  EE09    20 3F                         JR   NZ,RDERR
   EE0B    23                            INC  HL
   EE0C    23                            INC  HL
   EE0D    79                            LD   A,C
   EE0E    01 0080                       LD   BC,0080H
   EE11    FE 06                         CP   06H
   EE13    28 08                         JR   Z,LEE1D
-  EE15    CD EEF8                       CALL LEEF8
+  EE15    CD EEF8                       CALL ADRRAF
   EE18    ED B2                         INIR
   EE1A    00                            NOP
-  EE1B    AF                            XOR  A
+  EE1B    AF                            XOR  A            ; in Ordnung
   EE1C    C9                            RET
                                 ;
   EE1D    21 0080               LEE1D:  LD   HL,0080H
   EE20    ED 5B F501                    LD   DE,(DMA)
-  EE24    CD E962                       CALL LE962
-  EE27    ED 43 F4CA                    LD   (DF4CA),BC
-  EE2B    CD EEF8                       CALL LEEF8
+  EE24    CD E962                       CALL CHKSU
+  EE27    ED 43 F4CA                    LD   (CHKSUM),BC
+  EE2B    CD EEF8                       CALL ADRRAF
+	MACRO-80 3.44	09-Dec-81	PAGE	1-20
+
+
   EE2E    ED B3                         OTIR
   EE30    00                            NOP
-  EE31    CD EEF8                       CALL LEEF8
+  EE31    CD EEF8                       CALL ADRRAF
   EE34    ED B2                         INIR
   EE36    00                            NOP
   EE37    21 0080                       LD   HL,0080H
   EE3A    ED 5B F501                    LD   DE,(DMA)
-  EE3E    CD E962                       CALL LE962
-  EE41    2A F4CA                       LD   HL,(DF4CA)
+  EE3E    CD E962                       CALL CHKSU
+  EE41    2A F4CA                       LD   HL,(CHKSUM)
   EE44    ED 42                         SBC  HL,BC
-  EE46    20 02                         JR   NZ,LEE4A
-  EE48    AF                            XOR  A
+  EE46    20 02                         JR   NZ,RDERR
+  EE48    AF                            XOR  A            ; in Ordnung
   EE49    C9                            RET
                                 ;
-  EE4A    3E FF                 LEE4A:  LD   A,0FFH
+  EE4A    3E FF                 RDERR:  LD   A,0FFH       ; Fehler
   EE4C    C9                            RET
                                 ;
   EE4D    20 3D 3E 49           TXTINI: DEFM " =>INIT.."
@@ -1233,9 +1328,6 @@
                                 ;
   EE5A    52 46 4C 20           RFLERR: DEFM "RFL ERROR!"
   EE5E    45 52 52 4F           
-	MACRO-80 3.44	09-Dec-81	PAGE	1-19
-
-
   EE62    52 21                 
   EE64    00                            DEFB 0
                                 ;
@@ -1271,6 +1363,9 @@
   EE9B    D3 E6                         OUT  (PE6),A      ;H-Adresse
   EE9D    D3 E5                         OUT  (PE5),A      ;Extended-Adresse
   EE9F    47                            LD   B,A
+	MACRO-80 3.44	09-Dec-81	PAGE	1-21
+
+
   EEA0    3E E5                         LD   A,0E5H       ;RD wird mit 0E5H formatiert
   EEA2    0E E6                         LD   C,0E6H
   EEA4    CD B000               RDFOR1: CALL HPRDSK       ;Hilfsprogramm Format RAM-Disk
@@ -1280,7 +1375,7 @@
   EEAE    22 F501                       LD   (DMA),HL
   EEB1    06 2C                         LD   B,2CH        ;44 Bloecke CCP+BDOS
   EEB3    CD EEC0                       CALL WRCCP
-  EEB6    C2 E913                       JP   NZ,LE913
+  EEB6    C2 E913                       JP   NZ,CPMERR
   EEB9    21 EE57                       LD   HL,TEXTOK
   EEBC    CD EA1A                       CALL OUTTXT
   EEBF    C9                            RET
@@ -1296,11 +1391,9 @@
   EED1    ED 53 F4FF            WRCCP1: LD   (SECTOR),DE
   EED5    22 F501                       LD   (DMA),HL
   EED8    C5                            PUSH BC
-  EED9    CD EDCA                       CALL WRITE
+  EED9    CD                            DEFB 0CDH         ;CALL WRITE -> CD ED CA
+  EEDA    EDCA                  WRCCP2: DEFW 0EDCAH       ; kannn durch     READ (EDC5) ersetzt werden
   EEDC    C1                            POP  BC
-	MACRO-80 3.44	09-Dec-81	PAGE	1-20
-
-
   EEDD    20 10                         JR   NZ,RDERRO
   EEDF    2A F501                       LD   HL,(DMA)
   EEE2    11 0080                       LD   DE,0080H
@@ -1317,13 +1410,13 @@
   EEF6    3D                            DEC  A
   EEF7    C9                            RET
                                 ;
-  EEF8    AF                    LEEF8:  XOR  A            ;L=RADR 0-7 , H=RADR 8-15 , A=RADR 16-19(21)
+  EEF8    AF                    ADRRAF: XOR  A            ;L=RADR 0-7 , H=RADR 8-15 , A=RADR 16-19(21)
   EEF9    6F                            LD   L,A
-  EEFA    3A F4C3                       LD   A,(DF4C3)    ;(RAFSEC)
+  EEFA    3A F4C3                       LD   A,(RAFSEC)   ;(RAFSEC)
   EEFD    67                            LD   H,A          ;H=Record (max. 128 = Bit 0-6)
   EEFE    CB 1C                         RR   H
   EF00    CB 1D                         RR   L            ;H0 -> L7 ...... H6 -> H5
-  EF02    3A F4C2                       LD   A,(DF4C2)    ;(RAFTRK) , A=Track (max. 64 bei 1M (256 bei 4M) = Bit 0-5(7)
+  EF02    3A F4C2                       LD   A,(RAFTRK)    ;(RAFTRK) , A=Track (max. 64 bei 1M (256 bei 4M) = Bit 0-5(7)
   EF05    CB 1F                         RR   A            ;A0 -> CY
   EF07    30 02                         JR   NC,LEF0B
   EF09    CB F4                         SET  6,H          ;H6 = A0 (RADR14)
@@ -1335,6 +1428,9 @@
   EF14    F6 E0                         OR   0E0H
   EF16    4F                            LD   C,A
   EF17    7D                            LD   A,L
+	MACRO-80 3.44	09-Dec-81	PAGE	1-22
+
+
   EF18    D3 E7                         OUT  (PE7),A      ;L-Adresse
   EF1A    7C                            LD   A,H
   EF1B    D3 E6                         OUT  (PE6),A      ;H-Adresse
@@ -1346,73 +1442,60 @@
   EF26    06 80                         LD   B,80H
   EF28    2A F501                       LD   HL,(DMA)
   EF2B    C9                            RET
-                                ;Ansprung unklar
-  EF2C    20 4F                 LEF2C:  JR   NZ,LEF7D
-  EF2E    4B                            LD   C,E
-  EF2F    20 54                         JR   NZ,LEF85
-  EF31    50                            LD   D,B
-  EF32    41                            LD   B,C
-  EF33    20 76                         JR   NZ,LEFAB
-  EF35    6F                            LD   L,A
-  EF36    6E                            LD   L,(HL)
-  EF37    20 32                         JR   NZ,LEF6B
-  EF39    30 30                         JR   NC,LEF6B
-  EF3B    30 48                         JR   NC,LEF85
-  EF3D    20 6E                         JR   NZ,LEFAD
-  EF3F    61                            LD   H,C
-  EF40    63                            LD   H,E
-  EF41    68                            LD   L,B
-  EF42    20 30                         JR   NZ,LEF74
-	MACRO-80 3.44	09-Dec-81	PAGE	1-21
-
-
-  EF44    31 3030                       LD   SP,3030H
-  EF47    48                            LD   C,B
-  EF48    20 75                         JR   NZ,LEFBF
-  EF4A    6D                            LD   L,L
-  EF4B    67                            LD   H,A
-  EF4C    65                            LD   H,L
-  EF4D    6C                            LD   L,H
-  EF4E    61                            LD   H,C
-  EF4F    64                            LD   H,H
-  EF50    65                            LD   H,L
-  EF51    6E                            LD   L,(HL)
-  EF52    21 2100                       LD   HL,2100H
-  EF55    00                            NOP
-  EF56    20 11                         JR   NZ,LEF69
-  EF58    00                            NOP
-  EF59    01 0001                       LD   BC,0001H
-  EF5C    B0                            OR   B
+                                ;
+                                ;-------------------  ist evtl. altes Fragment von LOAD ---------
+                                ;
+  EF2C    20 4F 4B 20           TRTXT:  DEFM " OK TPA von 2000H nach "
+  EF30    54 50 41 20           
+  EF34    76 6F 6E 20           
+  EF38    32 30 30 30           
+  EF3C    48 20 6E 61           
+  EF40    63 68 20              
+  EF43    30 31 30 30                   DEFM "0100H umgeladen!"
+  EF47    48 20 75 6D           
+  EF4B    67 65 6C 61           
+  EF4F    64 65 6E 21           
+  EF53    00                            DEFB 0
+                                        
+  EF54    21 2000                       LD   HL,2000H     ; Quelle
+  EF57    11 0100                       LD   DE,0100H     ; ZielAdresse
+  EF5A    01 B000                       LD   BC,0B000H    ; Laenge (maximum)
   EF5D    ED B0                         LDIR
-  EF5F    21 EF2C                       LD   HL,0EF2CH
+                                ;
+  EF5F    21 EF2C                       LD   HL,TRTXT
   EF62    CD EA1A                       CALL OUTTXT
   EF65    C9                            RET
                                 ;
+                                ;*************************  LOAD (Turbo)  ********************
+                                ;
   EF66    F3                    LOAD:   DI
-  EF67    ED 73 F4DC                    LD   (DF4DC),SP
-  EF6B    31 F498               LEF6B:  LD   SP,0F498H
+  EF67    ED 73 F4DC                    LD   (SPLOAD),SP
+  EF6B    31 F498               LEF6B:  LD   SP,LOADSP
   EF6E    F5                            PUSH AF
   EF6F    C5                            PUSH BC
   EF70    D5                            PUSH DE
   EF71    E5                            PUSH HL
   EF72    AF                            XOR  A
-  EF73    D3 1E                         OUT  (P1E),A
+  EF73    D3 1E                         OUT  (P1E),A        ; AC1-Mode
   EF75    11 0FFF                       LD   DE,0FFFH
   EF78    DF                            RST  18H
-  EF79    8D                            DEFB 0DH+80H
+  EF79    8D                            DEFB 0DH+80H        ; CR ausgeben
   EF7A    3E 20                         LD   A,20H
-  EF7C    32 F4CE                       LD   (DF4CE),A
-  EF7F    21 2000                       LD   HL,2000H
-  EF82    22 185B                       LD   (D185B),HL
-  EF85    CD 0B32               LEF85:  CALL L0B32
-  EF88    ED 5B 185B                    LD   DE,(D185B)
-  EF8C    2A 185D                       LD   HL,(D185D)
+  EF7C    32 F4CE                       LD   (CUALT),A
+  EF7F    21 2000                       LD   HL,2000H       ; Lade-Ziel-Adresse
+  EF82    22 185B                       LD   (ARG1),HL      ; nach Arg1
+  EF85    CD 0B32                       CALL KLOAD          ; Load From Kassette - Nicht MO11!!
+  EF88    ED 5B 185B                    LD   DE,(ARG1)      ; Anfang
+  EF8C    2A 185D                       LD   HL,(ARG2)      ; Ende
   EF8F    D5                            PUSH DE
   EF90    A7                            AND  A
   EF91    ED 52                         SBC  HL,DE
   EF93    E5                            PUSH HL
   EF94    7D                            LD   A,L
   EF95    2E 00                         LD   L,00H
+	MACRO-80 3.44	09-Dec-81	PAGE	1-23
+
+
   EF97    A7                            AND  A
   EF98    28 01                         JR   Z,LEF9B
   EF9A    24                            INC  H
@@ -1428,54 +1511,56 @@
   EFA7    DF                            RST  18H
   EFA8    41 6E 7A 61                   DEFM "Anzahl 100H Bloe"
   EFAC    68 6C 20 31           
-	MACRO-80 3.44	09-Dec-81	PAGE	1-22
-
-
   EFB0    30 30 48 20           
   EFB4    42 6C 6F 65           
   EFB8    63 6B 65 3A                   DEFM "cke:"
   EFBC    A0                            DEFB 20H+80H      ;" +80H
-  EFBD    CD E957                       CALL LE957
+  EFBD    CD E957                       CALL CPMMOD
   EFC0    7C                            LD   A,H
-  EFC1    CD EFD9                       CALL LEFD9
+  EFC1    CD EFD9                       CALL BCDKO
   EFC4    7D                            LD   A,L
-  EFC5    CD EFD9                       CALL LEFD9
+  EFC5    CD EFD9                       CALL BCDKO
   EFC8    C1                            POP  BC
-  EFC9    11 0100                       LD   DE,0100H
-  EFCC    E1                            POP  HL
-  EFCD    ED B0                         LDIR
+  EFC9    11 0100                       LD   DE,0100H     ; ZielAdresse
+  EFCC    E1                            POP  HL           ; verschieben von #2000
+  EFCD    ED B0                         LDIR              ; nach #0100 f. CP/M
   EFCF    E1                            POP  HL
   EFD0    D1                            POP  DE
   EFD1    C1                            POP  BC
   EFD2    F1                            POP  AF
-  EFD3    ED 7B F4DC                    LD   SP,(DF4DC)
+  EFD3    ED 7B F4DC                    LD   SP,(SPLOAD)
   EFD7    FB                            EI
   EFD8    C9                            RET
                                 ;
-  EFD9    F5                    LEFD9:  PUSH AF
+  EFD9    F5                    BCDKO:  PUSH AF
   EFDA    1F                            RRA
   EFDB    1F                            RRA
   EFDC    1F                            RRA
   EFDD    1F                            RRA
-  EFDE    CD EFE2                       CALL LEFE2
+  EFDE    CD EFE2                       CALL BCDK1
   EFE1    F1                            POP  AF
-  EFE2    E6 0F                 LEFE2:  AND  0FH
+  EFE2    E6 0F                 BCDK1:  AND  0FH
   EFE4    C6 90                         ADD  A,90H
   EFE6    27                            DAA
   EFE7    CE 40                         ADC  A,40H
   EFE9    27                            DAA
-  EFEA    C3 EFED                       JP   LEFED
+  EFEA    C3 EFED                       JP   OUTA
                                 ;
-  EFED    E5                    LEFED:  PUSH HL
+  EFED    E5                    OUTA:   PUSH HL        ; Ausgabe Zeichen aus Akku
   EFEE    D5                            PUSH DE
   EFEF    C5                            PUSH BC
-  EFF0    5F                            LD   E,A
-  EFF1    0E 02                         LD   C,02H
-  EFF3    CD 0005                       CALL L0005
+  EFF0    5F                            LD   E,A       ; ASCII-Zeichen nach E
+  EFF1    0E 02                         LD   C,02H     ; BDOS-FKT.-Nr. 2 (CONSOLEN-Ausgabe)
+  EFF3    CD 0005                       CALL BDOSF     ; BDOS Aufruf
   EFF6    C1                            POP  BC
   EFF7    D1                            POP  DE
   EFF8    E1                            POP  HL
   EFF9    C9                            RET
+                                ;
+                                ;******************************   Ende LOAD  *****************
+	MACRO-80 3.44	09-Dec-81	PAGE	1-24
+
+
                                 ;
   EFFA    2A F503               LEFFA:  LD   HL,(DPH)
   EFFD    22 F515                       LD   (DF515),HL
@@ -1493,9 +1578,6 @@
   F010    19                            ADD  HL,DE
   F011    D1                            POP  DE
   F012    7E                            LD   A,(HL)
-	MACRO-80 3.44	09-Dec-81	PAGE	1-23
-
-
   F013    B7                            OR   A
   F014    C9                            RET
                                 ;Ansprung unklar
@@ -1541,10 +1623,13 @@
   F066    ED 5B F518                    LD   DE,(DF518)
   F06A    ED 52                         SBC  HL,DE
   F06C    28 1F                         JR   Z,LF08D
+	MACRO-80 3.44	09-Dec-81	PAGE	1-25
+
+
   F06E    3A F51B               LF06E:  LD   A,(DF51B)
   F071    B7                            OR   A
   F072    C4 F0CE                       CALL NZ,LF0CE
-  F075    21 F4FC               LF075:  LD   HL,0F4FCH
+  F075    21 F4FC               LF075:  LD   HL,DRIVE
   F078    11 F505                       LD   DE,0F505H
   F07B    01 0009                       LD   BC,0009H
   F07E    ED B0                         LDIR
@@ -1558,9 +1643,6 @@
   F091    3A F4FF                       LD   A,(SECTOR)
   F094    A6                            AND  (HL)
   F095    1F                            RRA
-	MACRO-80 3.44	09-Dec-81	PAGE	1-24
-
-
   F096    67                            LD   H,A
   F097    3E 00                         LD   A,00H
   F099    1F                            RRA
@@ -1592,7 +1674,8 @@
   F0CD    C9                            RET
                                 ;
   F0CE    3E 06                 LF0CE:  LD   A,06H
-  F0D0    21 043E                       LD   HL,043EH
+  F0D0    21                            DEFB 21H             ; LD   HL,043EH  -> 21 3E 04
+  F0D1    3E 04                 LF0D1:  LD   A,04H  
   F0D3    32 F517                       LD   (DF517),A
   F0D6    21 F51F                       LD   HL,0F51FH
   F0D9    22 F50A                       LD   (DF50A),HL
@@ -1601,10 +1684,13 @@
                                 ;
   F0E1    3A F4FB               LF0E1:  LD   A,(DF4FB)
   F0E4    32 F517                       LD   (DF517),A
-  F0E7    21 F4FC                       LD   HL,0F4FCH
+  F0E7    21 F4FC                       LD   HL,DRIVE
   F0EA    11 F50E               LF0EA:  LD   DE,0F50EH
   F0ED    01 0009                       LD   BC,0009H
   F0F0    ED B0                         LDIR
+	MACRO-80 3.44	09-Dec-81	PAGE	1-26
+
+
   F0F2    3A F50E                       LD   A,(DF50E)
   F0F5    17                            RLA
   F0F6    DA F307                       JP   C,LF307
@@ -1623,9 +1709,6 @@
   F114    23                            INC  HL
   F115    7E                            LD   A,(HL)
   F116    32 F4E9                       LD   (DF4E9),A
-	MACRO-80 3.44	09-Dec-81	PAGE	1-25
-
-
   F119    3A F511                       LD   A,(DF511)
   F11C    BE                            CP   (HL)
   F11D    38 04                         JR   C,LF123
@@ -1670,6 +1753,9 @@
   F168    B7                            OR   A
   F169    C8                            RET  Z
   F16A    10 F7                         DJNZ LF163
+	MACRO-80 3.44	09-Dec-81	PAGE	1-27
+
+
   F16C    0D                            DEC  C
   F16D    C8                            RET  Z
   F16E    C5                            PUSH BC
@@ -1688,9 +1774,6 @@
   F189    3A F4E8                       LD   A,(DF4E8)
   F18C    3C                            INC  A
   F18D    29                    LF18D:  ADD  HL,HL
-	MACRO-80 3.44	09-Dec-81	PAGE	1-26
-
-
   F18E    3D                            DEC  A
   F18F    20 FC                         JR   NZ,LF18D
   F191    2B                            DEC  HL
@@ -1735,6 +1818,9 @@
                                 ;
   F1D5    01 0207               LF1D5:  LD   BC,0207H
   F1D8    CD F227                       CALL LF227
+	MACRO-80 3.44	09-Dec-81	PAGE	1-28
+
+
   F1DB    CD F207                       CALL LF207
   F1DE    C8                            RET  Z
   F1DF    01 0207                       LD   BC,0207H
@@ -1753,9 +1839,6 @@
   F1FB    32 F4E5                       LD   (DF4E5),A
   F1FE    CD F227               LF1FE:  CALL LF227
   F201    3A F4F7                       LD   A,(DF4F7)
-	MACRO-80 3.44	09-Dec-81	PAGE	1-27
-
-
   F204    32 F4E5                       LD   (DF4E5),A
   F207    01 0108               LF207:  LD   BC,0108H
   F20A    CD F227                       CALL LF227
@@ -1800,6 +1883,9 @@
   F24F    7D                    LF24F:  LD   A,L
   F250    B4                            OR   H
   F251    3E C0                         LD   A,0C0H
+	MACRO-80 3.44	09-Dec-81	PAGE	1-29
+
+
   F253    28 0B                         JR   Z,LF260      ;Abbruch nach 8192 Versuchen
   F255    DB 40                         IN   A,(CFDC)     ;Lese Hauptstatusregister
   F257    E6 C0                         AND  0C0H
@@ -1818,9 +1904,6 @@
   F265    CB CF                         SET  1,A
   F267    D3 45                         OUT  (LATCH),A    ;WAIT-Freigabe
   F269    DB 40                 RW01:   IN   A,(CFDC)     ;Lese Hauptstatusregister
-	MACRO-80 3.44	09-Dec-81	PAGE	1-28
-
-
   F26B    07                            RLCA
   F26C    30 FB                         JR   NC,RW01      ;FDC noch nicht bereit
   F26E    ED                            DEFB 0EDH         ;ED A2 = INI
@@ -1865,6 +1948,9 @@
   F2AE    20 04                         JR   NZ,LF2B4
   F2B0    79                            LD   A,C
   F2B1    A7                            AND  A
+	MACRO-80 3.44	09-Dec-81	PAGE	1-30
+
+
   F2B2    20 09                         JR   NZ,LF2BD
   F2B4    3E 48                 LF2B4:  LD   A,48H
   F2B6    CB 3F                         SRL  A
@@ -1883,9 +1969,6 @@
   F2CB    01 0204                       LD   BC,0204H
   F2CE    CD F22C                       CALL LF22C
   F2D1    CD F24B                       CALL LF24B
-	MACRO-80 3.44	09-Dec-81	PAGE	1-29
-
-
   F2D4    E1                            POP  HL
   F2D5    C1                            POP  BC
   F2D6    CB 6F                         BIT  5,A
@@ -1930,6 +2013,9 @@
   F318    3C                    LF318:  INC  A
   F319    ED 42                         SBC  HL,BC
   F31B    28 02                         JR   Z,LF31F
+	MACRO-80 3.44	09-Dec-81	PAGE	1-31
+
+
   F31D    30 F9                         JR   NC,LF318
   F31F    09                    LF31F:  ADD  HL,BC
   F320    3D                            DEC  A
@@ -1948,9 +2034,6 @@
   F332    2A F50F                       LD   HL,(DF50F)
   F335    19                            ADD  HL,DE
   F336    7D                            LD   A,L
-	MACRO-80 3.44	09-Dec-81	PAGE	1-30
-
-
   F337    D3 8C                         OUT  (P8C),A
   F339    7C                            LD   A,H
   F33A    D3 8D                         OUT  (P8D),A
@@ -1995,6 +2078,9 @@
   F386    EB                    LF386:  EX   DE,HL
   F387    23                            INC  HL
   F388    23                            INC  HL
+	MACRO-80 3.44	09-Dec-81	PAGE	1-32
+
+
   F389    23                            INC  HL
   F38A    23                            INC  HL
   F38B    23                            INC  HL
@@ -2013,9 +2099,6 @@
   F39D    05                            DEC  B
   F39E    ED 78                         IN   A,(C)
   F3A0    E6 0F                         AND  0FH
-	MACRO-80 3.44	09-Dec-81	PAGE	1-31
-
-
   F3A2    B3                            OR   E
   F3A3    5E                            LD   E,(HL)
   F3A4    77                            LD   (HL),A
@@ -2060,36 +2143,36 @@
   F3E0    01 0D85               LF3E0:  LD   BC,0D85H
   F3E3    3E 01                         LD   A,01H
   F3E5    ED 79                         OUT  (C),A
+	MACRO-80 3.44	09-Dec-81	PAGE	1-33
+
+
   F3E7    ED 78                         IN   A,(C)
   F3E9    CB 4F                         BIT  1,A
   F3EB    C8                            RET  Z
   F3EC    AF                            XOR  A
   F3ED    ED 79                         OUT  (C),A
   F3EF    18 EF                         JR   LF3E0
-                                ;Ansprung unklar
-  F3F1    F3                    LF3F1:  DI
+                                ;Ansprung unklar               fuer Debugging
+  F3F1    F3                    MOHEX:  DI
   F3F2    F5                            PUSH AF
-  F3F3    CD E95C                       CALL LE95C
-  F3F6    CD 07EE                       CALL L07EE
-  F3F9    CD E957                       CALL LE957
+  F3F3    CD E95C                       CALL AC1MOD
+  F3F6    CD 07EE                       CALL OUTHEX   ; gibt den Akku als zweistellige Hexzahl auf dem Schirm aus
+  F3F9    CD E957                       CALL CPMMOD
   F3FC    F1                            POP  AF
   F3FD    FB                            EI
   F3FE    C9                            RET
-                                ;Ansprung unklar
-  F3FF    F3                    LF3FF:  DI
+                                ;Ansprung unklar               fuer Debugging
+  F3FF    F3                    MOHL:   DI
   F400    F5                            PUSH AF
-	MACRO-80 3.44	09-Dec-81	PAGE	1-32
-
-
-  F401    CD E95C                       CALL LE95C
-  F404    CD 07F1                       CALL L07F1
-  F407    CF                            RST  08H
-  F408    CD E957                       CALL LE957
+  F401    CD E95C                       CALL AC1MOD
+  F404    CD 07F1                       CALL OUTHL    ; gibt das HL-Register als vierstellige Hexzahl auf dem Schirm
+  F407    CF                            RST  08H      ; warten auf Taste
+  F408    CD E957                       CALL CPMMOD
   F40B    F1                            POP  AF
   F40C    FB                            EI
   F40D    C9                            RET
                                 ;
-  F40E    43 4F 4E 49           LF40E:  DEFM "CONIN-ZBIOS-STACK==26BYTES"
+  F40E    43 4F 4E 49                   DEFM "CONIN-ZBIOS-STACK==26BYTES"
   F412    4E 2D 5A 42           
   F416    49 4F 53 2D           
   F41A    53 54 41 43           
@@ -2103,7 +2186,7 @@
   F438    4B 3D 3D 32           
   F43C    36 42 59 54           
   F440    45 53                 
-  F442    43 4F 4E 4F                   DEFM "CONOUT-STACK_CONOUT-STACK_CONOUT-STACK"
+  F442    43 4F 4E 4F           CINSP:  DEFM "CONOUT-STACK_CONOUT-STACK_CONOUT-STACK"
   F446    55 54 2D 53           
   F44A    54 41 43 4B           
   F44E    5F 43 4F 4E           
@@ -2113,7 +2196,7 @@
   F45E    4E 4F 55 54           
   F462    2D 53 54 41           
   F466    43 4B                 
-  F468    4C 4F 41 44                   DEFM "LOAD-ZBIOS-STACK=48BYTES"
+  F468    4C 4F 41 44           COUTSP: DEFM "LOAD-ZBIOS-STACK=48BYTES"
   F46C    2D 5A 42 49           
   F470    4F 53 2D 53           
   F474    54 41 43 4B           
@@ -2125,7 +2208,10 @@
   F48C    54 41 43 4B           
   F490    3D 34 38 42           
   F494    59 54 45 53           
-  F498    5A 42 49 4F                   DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
+	MACRO-80 3.44	09-Dec-81	PAGE	1-34
+
+
+  F498    5A 42 49 4F           LOADSP: DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
   F49C    53 28 43 29           
   F4A0    4D 4C 2D 53           
   F4A4    4F 46 54 20           
@@ -2136,43 +2222,40 @@
   F4B8    43 29 48 52           
   F4BC    20 32 30 31           
   F4C0    31                    
+  F4C1    00                    CPMSTK: NOP
                                 ;
-  F4C1    00                            NOP
-  F4C2    00                            NOP
-  F4C3    00                    DF4C3:  NOP
-  F4C4    00                            NOP
-  F4C5    00                            NOP
-  F4C6    00                            NOP
-	MACRO-80 3.44	09-Dec-81	PAGE	1-33
-
-
-  F4C7    00                            NOP
-  F4C8    00                            NOP
-  F4C9    00                            NOP
-  F4CA    00                    DF4CA:  NOP
-  F4CB    00                            NOP
-  F4CC    00                            NOP
-  F4CD    01 20 00              DF4CD:  DEFB 1,20H,0
-  F4D0    00                    DF4D0:  NOP
-  F4D1    00                    DF4D1:  NOP
-  F4D2    00                    DF4D2:  NOP
-  F4D3    00                    DF4D3:  NOP
-  F4D4    00                            NOP
-  F4D5    00                    DF4D5:  NOP
-  F4D6    00                            NOP
-  F4D7    00                            NOP
-  F4D8    00                    DF4D8:  NOP
-  F4D9    00                            NOP
-  F4DA    00                    DF4DA:  NOP
-  F4DB    00                            NOP
-  F4DC    00                    DF4DC:  NOP
-  F4DD    00                            NOP
-  F4DE    00                    DF4DE:  NOP
-  F4DF    00                            NOP
-  F4E0    00                            NOP
-  F4E1    00                            NOP
-  F4E2    00                            NOP
-  F4E3    00                            NOP
+  F4C2    00                    RAFTRK: DEFB 0   ; RAFTRK  EQU  0F4C2H
+  F4C3    00                    RAFSEC: DEFB 0
+  F4C4    00                            NOP   ; kein Verweis   F4C4
+  F4C5    00                            NOP   ; kein Verweis   F4C5
+  F4C6    00                            NOP   ; kein Verweis   F4C6
+  F4C7    00                            NOP   ; kein Verweis   F4C7
+  F4C8    00                            NOP   ; kein Verweis   F4C8
+  F4C9    00                            NOP   ; kein Verweis   F4C9
+  F4CA    0000                  CHKSUM: DEFW 0   ; Merkzelle f. Pruefsumme       F4CAh
+  F4CC    00                            NOP      ; kein Verweis   F4CC
+  F4CD    01                    CUFLAG: DEFB 1   ;CUON/CUOFF   1/0  KursorFlag   F4CDh
+  F4CE    20                    CUALT:  DEFB 20H ;Cursor OFF Symbol
+  F4CF    00                    STZ00:  DEFB 0   ;Merkzelle Anz. BS-Steuerzeichen   F4CFh
+  F4D0    00                    STZ01:  DEFB 0   ;Merkzelle fuer 1. ESC-Steuerzeichen
+  F4D1    00                    STZ02:  DEFB 0   ;Merkzelle fuer 2. ESC-Steuerzeichen
+                                ;
+  F4D2    00                    CHAR:   DEFB 0   ; Merkzelle Zeichen <> Cursor    F4D2h
+                                ;
+  F4D3    00                    COLOR:  DEFB 0   ; Merkzelle BWS-Farbe (0=Monochrom-BWS)
+  F4D4    00                    COLO1:  DEFB 0   ; aktuelle Farbe ohne invers und intensiv
+  F4D5    00                    COLO2:  DEFB 0   ; Farbe fuer Monitor und CP/M Warmstart
+                                ;
+  F4D6    00                            NOP      ; kein Verweis   F4D6
+  F4D7    00                            NOP      ; kein Verweis   F4D7
+  F4D8    0000                  SPCIN:  DEFW 0    ;F4D8
+  F4DA    0000                  SPCOUT: DEFW 0
+  F4DC    0000                  SPLOAD: DEFW 0
+  F4DE    0000                  OLDNMI: DEFW 0    ;F4DE
+  F4E0    00                            NOP      ; kein Verweis   F4E0
+  F4E1    00                            NOP      ; kein Verweis   F4E1
+  F4E2    00                    DF4E2:  NOP
+  F4E3    00                            NOP      ; Merkzelle
   F4E4    00                    DF4E4:  NOP
   F4E5    00                    DF4E5:  NOP
   F4E6    00                    DF4E6:  NOP
@@ -2181,59 +2264,51 @@
   F4E9    00                    DF4E9:  NOP
   F4EA    00                    DF4EA:  NOP
   F4EB    00                    DF4EB:  NOP
-  F4EC    00                            NOP
+  F4EC    00                            NOP      ; 4 Merkzellen  
   F4ED    00                            NOP
-  F4EE    00                    CTAB:   NOP               ;FDC Befehlsbyte
-  F4EF    00                            NOP
-  F4F0    00                            NOP
-  F4F1    00                            NOP
-  F4F2    00                            NOP
-  F4F3    00                            NOP
-  F4F4    00                            NOP
-  F4F5    00                            NOP
-  F4F6    00                            NOP
+  F4EE    00                    CTAB:   NOP      ;FDC Befehlsbyte
+  F4EF    00                            NOP      ; 4 Merkzellen  Ende
+  F4F0    00                    DF4F0:  NOP      ;F4F0
+  F4F1    00                            NOP      ; kein Verweis   F4F1
+  F4F2    00                            NOP      ; kein Verweis   F4F2
+  F4F3    00                            NOP      ; kein Verweis   F4F3
+  F4F4    00                            NOP      ; kein Verweis   F4F4
+	MACRO-80 3.44	09-Dec-81	PAGE	1-35
+
+
+  F4F5    00                            NOP      ; kein Verweis   F4F5
+  F4F6    00                            NOP      ; kein Verweis   F4F6
   F4F7    00                    DF4F7:  NOP
   F4F8    00                    DF4F8:  NOP
   F4F9    00                    DF4F9:  NOP
   F4FA    00                    LATPU:  NOP
-  F4FB    04                    DF4FB:  DEFB 4
-  F4FC    00                            NOP
+  F4FB    04                    DF4FB:  DEFB 4      ; 4 = READ,  6 = WRITE
+  F4FC    00                    DRIVE:  DEFB 0      ; LW-Nr.
   F4FD    0000                  TRACK:  DEFW 0
-  F4FF    0000                  SECTOR: DEFW 0
+  F4FF    0000                  SECTOR: DEFW 0      ;F4FF
   F501    0000                  DMA:    DEFW 0
-  F503    00                    DPH:    NOP
-  F504    00                            NOP
-  F505    00                            NOP
-  F506    00                    DF506:  NOP
-  F507    00                            NOP
-  F508    00                    DF508:  NOP
-  F509    00                            NOP
-	MACRO-80 3.44	09-Dec-81	PAGE	1-34
-
-
-  F50A    00                    DF50A:  NOP
-  F50B    00                            NOP
-  F50C    00                            NOP
-  F50D    00                            NOP
+  F503    0000                  DPH:    DEFW 0
+  F505    00                    DF505:  DEFB 0
+  F506    0000                  DF506:  DEFW 0
+  F508    0000                  DF508:  DEFW 0
+  F50A    0000                  DF50A:  DEFW 0
+  F50C    00                            NOP      ; kein Verweis   F50C
+  F50D    00                            NOP      ; kein Verweis   F50D
   F50E    00                    DF50E:  NOP
   F50F    00                    DF50F:  NOP
   F510    00                    DF510:  NOP
-  F511    00                    DF511:  NOP
-  F512    00                            NOP
-  F513    00                    DF513:  NOP
-  F514    00                            NOP
-  F515    00                    DF515:  NOP
-  F516    00                            NOP
+  F511    0000                  DF511:  DEFW 0
+  F513    0000                  DF513:  DEFW 0
+  F515    0000                  DF515:  DEFW 0
   F517    04                    DF517:  DEFB 4
-  F518    00                    DF518:  NOP
-  F519    00                            NOP
-  F51A    00                    DF51A:  NOP
+  F518    0000                  DF518:  DEFW 0
+  F51A    00                    DF51A:  DEFB 0
   F51B    00                    DF51B:  NOP
   F51C    00                    DF51C:  NOP
   F51D    00                    DF51D:  NOP
   F51E    00                    DF51E:  NOP
                                 ;
-  F51F                                  DEFS 1024,0
+  F51F                                  DEFS 1024,0       ;F51Fh
   F91F                          DIRBF:  DEFS 128,0        ;0F91FH
   F99F                          ALL01:  DEFS 50,0         ;0F99FH
   F9D1                          ALL02:  DEFS 504,0        ;0F9D1H
@@ -2245,76 +2320,47 @@
   FE4D                          CHK02:  DEFS 32,0         ;0FE4DH
   FE6D                          CHK06:  DEFS 32,0         ;0FE6DH
   FE8D                                  DEFS 115,1AH      ;0FE8DH
-  FF00                          ALL00:                    ;ALL00 zeigt hinter das BIOS
+  FF00                          ALL00:                    ;ALL00 zeigt hinter das BIOS   FF00
+                                ;                          1024k / 2k Bloecke = 512 Bloecke
+                                ;                          512 / 8 bit/Byte = 64 Byte ALV benoetigt
                                 ;
-  0000                          L0000   EQU  0000H
-  0005                          L0005   EQU  0005H
-  01A5                          L01A5   EQU  01A5H
-  0221                          L0221   EQU  0221H
-  05CE                          L05CE   EQU  05CEH
-  07EE                          L07EE   EQU  07EEH
-  07F1                          L07F1   EQU  07F1H
-  0B32                          L0B32   EQU  0B32H
-  77F4                          L77F4   EQU  77F4H
-  ED3C                          LED3C   EQU  0ED3CH
-  EE65                          LEE65   EQU  0EE65H
-  EE8C                          LEE8C   EQU  0EE8CH
-  EF69                          LEF69   EQU  0EF69H
-  EF74                          LEF74   EQU  0EF74H
-  EF7D                          LEF7D   EQU  0EF7DH
-  EFAB                          LEFAB   EQU  0EFABH
-  EFAD                          LEFAD   EQU  0EFADH
-  EFBF                          LEFBF   EQU  0EFBFH
-  F0D1                          LF0D1   EQU  0F0D1H
-  0000                          D0000   EQU  0000H        ;Die Datenworte muessen alle noch aufgeloest werden!
-  0001                          D0001   EQU  0001H
-  0003                          D0003   EQU  0003H
-  0004                          D0004   EQU  0004H
-  0005                          D0005   EQU  0005H
-  0006                          D0006   EQU  0006H
-  0038                          D0038   EQU  0038H
-	MACRO-80 3.44	09-Dec-81	PAGE	1-35
-
-
-  0039                          D0039   EQU  0039H
-  0066                          D0066   EQU  0066H
-  0067                          D0067   EQU  0067H
-  1800                          D1800   EQU  1800H
-  1818                          D1818   EQU  1818H
-  181F                          D181F   EQU  181FH
-  185B                          D185B   EQU  185BH
-  185D                          D185D   EQU  185DH
-  EEDA                          DEEDA   EQU  0EEDAH
-  F4C2                          DF4C2   EQU  0F4C2H
-  F4CE                          DF4CE   EQU  0F4CEH
-  F4CF                          DF4CF   EQU  0F4CFH
-  F4D4                          DF4D4   EQU  0F4D4H
-  F4E2                          DF4E2   EQU  0F4E2H
-  F4F0                          DF4F0   EQU  0F4F0H
-  F4FC                          DRIVE   EQU  0F4FCH
-  FF80                          DFF80   EQU  0FF80H
+                                ;
+                                ;
+                                ;
+  FF80                          DFF80   EQU  0FF80H     ; InterruptVectoren ?
   FF82                          DFF82   EQU  0FF82H
   FF84                          DFF84   EQU  0FF84H
   FF86                          DFF86   EQU  0FF86H
   FF88                          DFF88   EQU  0FF88H
   FF8A                          DFF8A   EQU  0FF8AH
-  FFD0                          DFFD0   EQU  0FFD0H
-  0000                          P00     EQU  00H
+                                ;
+                                ;#############################   PortAdressen   ##############
+                                ;
+  0000                          P00     EQU  00H     ; CTC
   0001                          P01     EQU  01H
+	MACRO-80 3.44	09-Dec-81	PAGE	1-36
+
+
   0002                          P02     EQU  02H
   0003                          P03     EQU  03H
-  0004                          P04     EQU  04H
+                                ;
+  0004                          P04     EQU  04H     ; PIO 1
   0005                          P05     EQU  05H
   0006                          P06     EQU  06H
-  0011                          P11     EQU  11H
-  001E                          P1E     EQU  1EH
-  008A                          P8A     EQU  8AH
+                                ;
+  0011                          P11     EQU  11H     ; IOSEL 4   ??
+                                ;
+  001E                          P1E     EQU  1EH     ; CP/M - Umschalter
+                                ;
+  008A                          P8A     EQU  8AH     ; GIDE ? -> 80h
   008B                          P8B     EQU  8BH
   008C                          P8C     EQU  8CH
   008D                          P8D     EQU  8DH
   008E                          P8E     EQU  8EH
   008F                          P8F     EQU  8FH
-  00F0                          PF0     EQU  0F0H
+                                ;
+  00F0                          PF0     EQU  0F0H     ; C-BWS-(Steuer)Port
+                                ;
                                 ;
                                         .DEPHASE
                                         END
@@ -2324,27 +2370,37 @@
 Macros:
 
 Symbols:
-FF00 	ALL00           F99F 	ALL01           F9D1 	ALL02           
-FBC9 	ALL03           FCC9 	ALL04           FDC9 	ALL05           
-FDFB 	ALL06           E83F 	BOOT            E641 	CCP             
-0040 	CFDC            FE2D 	CHK00           FE4D 	CHK02           
-FE6D 	CHK06           EA34 	CONIN           EA94 	CONOUT          
-EA2C 	CONST           F4EE 	CTAB            0000 	D0000           
-0001 	D0001           0003 	D0003           0004 	D0004           
-0005 	D0005           0006 	D0006           0038 	D0038           
-0039 	D0039           0066 	D0066           0067 	D0067           
-1800 	D1800           1818 	D1818           181F 	D181F           
-185B 	D185B           185D 	D185D           EEDA 	DEEDA           
-F4C2 	DF4C2           F4C3 	DF4C3           F4CA 	DF4CA           
-F4CD 	DF4CD           F4CE 	DF4CE           F4CF 	DF4CF           
-F4D0 	DF4D0           F4D1 	DF4D1           F4D2 	DF4D2           
-F4D3 	DF4D3           F4D4 	DF4D4           F4D5 	DF4D5           
-F4D8 	DF4D8           F4DA 	DF4DA           F4DC 	DF4DC           
-F4DE 	DF4DE           F4E2 	DF4E2           F4E4 	DF4E4           
-F4E5 	DF4E5           F4E6 	DF4E6           F4E7 	DF4E7           
-F4E8 	DF4E8           F4E9 	DF4E9           F4EA 	DF4EA           
-F4EB 	DF4EB           F4F0 	DF4F0           F4F7 	DF4F7           
-F4F8 	DF4F8           F4F9 	DF4F9           F4FB 	DF4FB           
+E95C 	AC1MOD          EEF8 	ADRRAF          FF00 	ALL00           
+F99F 	ALL01           F9D1 	ALL02           FBC9 	ALL03           
+FCC9 	ALL04           FDC9 	ALL05           FDFB 	ALL06           
+185B 	ARG1            185D 	ARG2            EFE2 	BCDK1           
+EFD9 	BCDKO           EB85 	BCL1            EB59 	BCLS            
+D806 	BDOS            0005 	BDOSF           EC91 	BINTE           
+EC82 	BINVN           EC9E 	BIVIN           EC74 	BNORM           
+E83F 	BOOT            E92D 	BOOT1           1818 	BREAK           
+ED41 	BWSCOL          ED50 	BWSINI          ED4B 	BWSZ1           
+ED47 	BWSZEI          EB9E 	CBLO1           EBB3 	CBLO2           
+EB9B 	CBLOE           181F 	CBWSB           EC32 	CCHA1           
+EC22 	CCHAR           E641 	CCP             EB94 	CCRET           
+0040 	CFDC            F4D2 	CHAR            FE2D 	CHK00           
+FE4D 	CHK02           FE6D 	CHK06           E965 	CHKS1           
+E962 	CHKSU           F4CA 	CHKSUM          EC12 	CHOCH           
+EC16 	CHOLI           EB50 	CHOME           F442 	CINSP           
+EB78 	CLEFT           EB7C 	CLF             F4D4 	COLO1           
+F4D5 	COLO2           F4D3 	COLOR           EA3F 	CON10           
+EA5A 	CON11           EA60 	CON12           EA7C 	CON20           
+EA8F 	CON21           EA34 	CONIN           EA94 	CONOUT          
+EA2C 	CONST           F468 	COUTSP          E913 	CPMERR          
+E957 	CPMMOD          F4C1 	CPMSTK          EBBE 	CRIGH           
+F4EE 	CTAB            F4CE 	CUALT           F4CD 	CUFLAG          
+ECB7 	CUOFF           ECAF 	CUON            1800 	CUPOS           
+EBF4 	CZLC1           EC08 	CZLC2           EBE9 	CZLCR           
+EBC8 	CZLO1           EBDF 	CZLO2           EBC2 	CZLOE           
+F4E2 	DF4E2           F4E4 	DF4E4           F4E5 	DF4E5           
+F4E6 	DF4E6           F4E7 	DF4E7           F4E8 	DF4E8           
+F4E9 	DF4E9           F4EA 	DF4EA           F4EB 	DF4EB           
+F4F0 	DF4F0           F4F7 	DF4F7           F4F8 	DF4F8           
+F4F9 	DF4F9           F4FB 	DF4FB           F505 	DF505           
 F506 	DF506           F508 	DF508           F50A 	DF50A           
 F50E 	DF50E           F50F 	DF50F           F510 	DF510           
 F511 	DF511           F513 	DF513           F515 	DF515           
@@ -2352,96 +2408,80 @@ F517 	DF517           F518 	DF518           F51A 	DF51A
 F51B 	DF51B           F51C 	DF51C           F51D 	DF51D           
 F51E 	DF51E           0041 	DFDC            FF80 	DFF80           
 FF82 	DFF82           FF84 	DFF84           FF86 	DFF86           
-FF88 	DFF88           FF8A 	DFF8A           FFD0 	DFFD0           
-F91F 	DIRBF           F2DD 	DISCTX          F501 	DMA             
-E6C6 	DPB0            E6D7 	DPB1            E6F3 	DPB2            
-E70F 	DPB3            E72B 	DPB4            E747 	DPB5            
-E763 	DPB6            F503 	DPH             E654 	DPH0            
-E664 	DPH1            E674 	DPH2            E684 	DPH3            
-E694 	DPH4            E6A4 	DPH5            E6B4 	DPH6            
-E644 	DPHX            E646 	DPHY            F4FC 	DRIVE           
-D000 	EQUCCP          E98C 	EXIT            EDA7 	HOME            
-B000 	HPRDSK          0000 	L0000           0005 	L0005           
-01A5 	L01A5           0221 	L0221           05CE 	L05CE           
-07EE 	L07EE           07F1 	L07F1           0B32 	L0B32           
-77F4 	L77F4           0045 	LATCH           F4FA 	LATPU           
-E913 	LE913           E92D 	LE92D           E957 	LE957           
-E95C 	LE95C           E95E 	LE95E           E962 	LE962           
-E965 	LE965           E990 	LE990           E9B2 	LE9B2           
-E9BF 	LE9BF           E9CA 	LE9CA           E9E7 	LE9E7           
-E9E8 	LE9E8           E9FA 	LE9FA           E9FF 	LE9FF           
-EA05 	LEA05           EA13 	LEA13           EA1C 	LEA1C           
-EA27 	LEA27           EA2A 	LEA2A           EA3F 	LEA3F           
-EA5A 	LEA5A           EA60 	LEA60           EA7C 	LEA7C           
-EA85 	LEA85           EA8F 	LEA8F           EAC1 	LEAC1           
-EAD1 	LEAD1           EADE 	LEADE           EAE9 	LEAE9           
-EB50 	LEB50           EB59 	LEB59           EB78 	LEB78           
-EB7C 	LEB7C           EB85 	LEB85           EB94 	LEB94           
-EB9B 	LEB9B           EB9E 	LEB9E           EBB3 	LEBB3           
-EBBE 	LEBBE           EBC2 	LEBC2           EBC8 	LEBC8           
-EBDF 	LEBDF           EBE9 	LEBE9           EBF4 	LEBF4           
-EC08 	LEC08           EC12 	LEC12           EC16 	LEC16           
-EC22 	LEC22           EC32 	LEC32           EC33 	LEC33           
+FF88 	DFF88           FF8A 	DFF8A           F91F 	DIRBF           
+F2DD 	DISCTX          F501 	DMA             E6C6 	DPB0            
+E6D7 	DPB1            E6F3 	DPB2            E70F 	DPB3            
+E72B 	DPB4            E747 	DPB5            E763 	DPB6            
+F503 	DPH             E654 	DPH0            E664 	DPH1            
+E674 	DPH2            E684 	DPH3            E694 	DPH4            
+E6A4 	DPH5            E6B4 	DPH6            E644 	DPHX            
+E646 	DPHY            F4FC 	DRIVE           D000 	EQUCCP          
+E98C 	EXIT            EDA7 	HOME            B000 	HPRDSK          
+0003 	IOBYTE          0B32 	KLOAD           ECBE 	KONV10          
+ECD1 	KONV20          ECEF 	KONV21          ED10 	KONV22          
+ED1C 	KONV24          EAE9 	KONVT1          EAC1 	KONVT9          
+EADE 	KONVTB          0045 	LATCH           F4FA 	LATPU           
+E990 	LE990           E9B2 	LE9B2           E9BF 	LE9BF           
+E9CA 	LE9CA           E9E7 	LE9E7           E9E8 	LE9E8           
+E9FA 	LE9FA           E9FF 	LE9FF           EA05 	LEA05           
+EA2A 	LEA2A           EA85 	LEA85           EAD1 	LEAD1           
+ED82 	LED82           EDEC 	LEDEC           EDF1 	LEDF1           
+EE1D 	LEE1D           EF0B 	LEF0B           EF11 	LEF11           
+EF6B 	LEF6B           EF9B 	LEF9B           EF9C 	LEF9C           
 	MACRO-80 3.44	09-Dec-81	PAGE	S-1
 
 
-EC5D 	LEC5D           EC6F 	LEC6F           EC74 	LEC74           
-EC82 	LEC82           EC91 	LEC91           EC9E 	LEC9E           
-ECAF 	LECAF           ECB7 	LECB7           ECBE 	LECBE           
-ECD1 	LECD1           ECEF 	LECEF           ED02 	LED02           
-ED10 	LED10           ED1C 	LED1C           ED3C 	LED3C           
-ED41 	LED41           ED47 	LED47           ED4B 	LED4B           
-ED50 	LED50           ED82 	LED82           EDEC 	LEDEC           
-EDF1 	LEDF1           EE1D 	LEE1D           EE4A 	LEE4A           
-EE65 	LEE65           EE8C 	LEE8C           EEF8 	LEEF8           
-EF0B 	LEF0B           EF11 	LEF11           EF2C 	LEF2C           
-EF69 	LEF69           EF6B 	LEF6B           EF74 	LEF74           
-EF7D 	LEF7D           EF85 	LEF85           EF9B 	LEF9B           
-EF9C 	LEF9C           EFA2 	LEFA2           EFAB 	LEFAB           
-EFAD 	LEFAD           EFBF 	LEFBF           EFD9 	LEFD9           
-EFE2 	LEFE2           EFED 	LEFED           EFFA 	LEFFA           
-F000 	LF000           F002 	LF002           F015 	LF015           
-F019 	LF019           F024 	LF024           F033 	LF033           
-F03D 	LF03D           F06E 	LF06E           F075 	LF075           
-F08D 	LF08D           F0AE 	LF0AE           F0C9 	LF0C9           
-F0CE 	LF0CE           F0D1 	LF0D1           F0E1 	LF0E1           
-F0EA 	LF0EA           F110 	LF110           F123 	LF123           
-F137 	LF137           F150 	LF150           F161 	LF161           
-F163 	LF163           F175 	LF175           F18D 	LF18D           
-F1C1 	LF1C1           F1C3 	LF1C3           F1C8 	LF1C8           
-F1CD 	LF1CD           F1D5 	LF1D5           F1E7 	LF1E7           
-F1FE 	LF1FE           F207 	LF207           F227 	LF227           
-F22C 	LF22C           F230 	LF230           F233 	LF233           
-F236 	LF236           F247 	LF247           F24B 	LF24B           
-F24F 	LF24F           F260 	LF260           F285 	LF285           
-F2A7 	LF2A7           F2A9 	LF2A9           F2B4 	LF2B4           
-F2BD 	LF2BD           F2C9 	LF2C9           F303 	LF303           
-F307 	LF307           F318 	LF318           F31F 	LF31F           
-F34B 	LF34B           F35D 	LF35D           F361 	LF361           
-F366 	LF366           F376 	LF376           F386 	LF386           
-F38F 	LF38F           F394 	LF394           F3AC 	LF3AC           
-F3B1 	LF3B1           F3C6 	LF3C6           F3CE 	LF3CE           
-F3E0 	LF3E0           F3F1 	LF3F1           F3FF 	LF3FF           
-F40E 	LF40E           EA92 	LIST            ED85 	LISTST          
-EF66 	LOAD            F26F 	MODE0           F275 	MODE1           
-E643 	NDISK           EA1A 	OUTTXT          0000 	P00             
+EFA2 	LEFA2           EFFA 	LEFFA           F000 	LF000           
+F002 	LF002           F015 	LF015           F019 	LF019           
+F024 	LF024           F033 	LF033           F03D 	LF03D           
+F06E 	LF06E           F075 	LF075           F08D 	LF08D           
+F0AE 	LF0AE           F0C9 	LF0C9           F0CE 	LF0CE           
+F0D1 	LF0D1           F0E1 	LF0E1           F0EA 	LF0EA           
+F110 	LF110           F123 	LF123           F137 	LF137           
+F150 	LF150           F161 	LF161           F163 	LF163           
+F175 	LF175           F18D 	LF18D           F1C1 	LF1C1           
+F1C3 	LF1C3           F1C8 	LF1C8           F1CD 	LF1CD           
+F1D5 	LF1D5           F1E7 	LF1E7           F1FE 	LF1FE           
+F207 	LF207           F227 	LF227           F22C 	LF22C           
+F230 	LF230           F233 	LF233           F236 	LF236           
+F247 	LF247           F24B 	LF24B           F24F 	LF24F           
+F260 	LF260           F285 	LF285           F2A7 	LF2A7           
+F2A9 	LF2A9           F2B4 	LF2B4           F2BD 	LF2BD           
+F2C9 	LF2C9           F303 	LF303           F307 	LF307           
+F318 	LF318           F31F 	LF31F           F34B 	LF34B           
+F35D 	LF35D           F361 	LF361           F366 	LF366           
+F376 	LF376           F386 	LF386           F38F 	LF38F           
+F394 	LF394           F3AC 	LF3AC           F3B1 	LF3B1           
+F3C6 	LF3C6           F3CE 	LF3CE           F3E0 	LF3E0           
+EA92 	LIST            ED85 	LISTST          EF66 	LOAD            
+F498 	LOADSP          0004 	LWBYTE          E95E 	MOD1            
+F26F 	MODE0           F275 	MODE1           F3F1 	MOHEX           
+F3FF 	MOHL            E643 	NDISK           0066 	NMI             
+F4DE 	OLDNMI          EFED 	OUTA            07EE 	OUTHEX          
+07F1 	OUTHL           EA1A 	OUTTXT          0000 	P00             
 0001 	P01             0002 	P02             0003 	P03             
 0004 	P04             0005 	P05             0006 	P06             
 0011 	P11             001E 	P1E             008A 	P8A             
 008B 	P8B             008C 	P8C             008D 	P8D             
 008E 	P8E             008F 	P8F             00E5 	PE5             
 00E6 	PE6             00E7 	PE7             00F0 	PF0             
-EA93 	PUNCH           EEEF 	RDERRO          EEA4 	RDFOR1          
-EE65 	RDFORM          EDC5 	READ            EE5A 	RFLERR          
-F262 	RW              F269 	RW01            F271 	RW02            
-F4FF 	SECTOR          EDB9 	SECTRN          ED88 	SELDSK          
-EDB4 	SETDMA          EDAF 	SETSEC          EDAA 	SETTRK          
-E77D 	TEXT1           EE57 	TEXTOK          F4FD 	TRACK           
-EE4D 	TXTINI          0043 	WAIT            E8D5 	WBOOT           
-E8F3 	WBOOT1          EEC0 	WRCCP           EED1 	WRCCP1          
-EDCA 	WRITE           
+EA13 	PIO1TAB         EA93 	PUNCH           F4C3 	RAFSEC          
+F4C2 	RAFTRK          EE4A 	RDERR           EEEF 	RDERRO          
+EEA4 	RDFOR1          EE65 	RDFORM          EDC5 	READ            
+05CE 	REGIST          EE5A 	RFLERR          01A5 	RSA             
+0038 	RST38           F262 	RW              F269 	RW01            
+F271 	RW02            EC5D 	SCR11           EC6F 	SCR12           
+EC33 	SCROL           F4FF 	SECTOR          EDB9 	SECTRN          
+ED88 	SELDSK          EDB4 	SETDMA          EDAF 	SETSEC          
+EDAA 	SETTRK          F4D8 	SPCIN           F4DA 	SPCOUT          
+F4DC 	SPLOAD          F4CF 	STZ00           F4D0 	STZ01           
+F4D1 	STZ02           EA1C 	TEXT1           EA27 	TEXT2           
+EE57 	TEXTOK          F4FD 	TRACK           EF2C 	TRTXT           
+E77D 	TXT01           EE4D 	TXTINI          0043 	WAIT            
+0000 	WARMBT          E8D5 	WBOOT           E8F3 	WBOOT1          
+E603 	WBOOTB          EEC0 	WRCCP           EED1 	WRCCP1          
+EEDA 	WRCCP2          EDCA 	WRITE           FFD0 	ZEIPUF          
 
 
 
-No Fatal error(s)
-   
+No Fatal error(s)  
