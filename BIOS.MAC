@@ -1,14 +1,14 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 06.08.2023  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 09.08.2023  *
 ; *                                                         *
-; *                                                BIOS136  *
+; *                                                  V.137  *
 ; *                                                         *
 ; ***********************************************************
 ;
 ; Korrekturen/Fehlerbehebungen am HRCPM12:
 ; - alle nicht genutzten Programmteile (HRDOS?) entfernt
-; - LOAD (Turbo) entfernt
+; - LOAD(Turbo) entfernt
 ; - BWS(Farb)Init geaendert
 ; - ^G BEEP + PUNCH:=V24out + LIST:=V24out zugefuegt
 ; - keine Pruefsumme, kein Vergleichslesen v. RAM-Disk (entfernt)
@@ -19,14 +19,15 @@
 ; - GIDE-Laufwerke (C:, D:, E:) auf 8MB, da nicht alle BDOS'se mit mehr
 ;   als 16 Bit fuer REC-NR. zurechtkommen.
 ; - Formatierung RAM-Disk: letzter Sektor wurde nicht formatiert
+; - falsche I/O-Adresse von Modul1
 ;
 ; Neu hinzugekommen:
-; - EXIT loescht CCPPUFLEN (B132)
-; - WBOOT loescht CCPPUFLEN, weil in Systemspur "aktiver Befehl" (B133)
-; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero) (B133)
-; - Tastaturpuffer von FFD0h -> FF00h , "d"-Befehl ueberschrieben (B134)
-; - nicht benutzte "Arbeitszellen" am Ende auskommentiert (B135)
-; - automatische Erkennung der RAM-Disk Groesse 256k/1024k/2048k (B136)
+; - EXIT loescht CCPPUFLEN (V.132)
+; - WBOOT loescht CCPPUFLEN, weil in Systemspur "aktiver Befehl" (V.133)
+; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero) (V.133)
+; - Tastaturpuffer von FFD0h -> FF00h , "d"-Befehl ueberschrieben (V.134)
+; - nicht benutzte "Arbeitszellen" am Ende auskommentiert (V.135)
+; - automatische Erkennung der RAM-Disk Groesse 256k/1024k/2048k (V.136)
 ;
         IF1
         .PRINTX 'PASS 1'
@@ -336,10 +337,8 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 ;
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
-        DEFM "24.08.86 FA-MODE "
-        DEFM "ConIn INT"
-        DEFB 0FH
-        DEFM " v. 03.12.11  B136"
+        DEFM "11.01.89 FA-MODE "
+        DEFM "vom 09.08.2023 V.137"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -530,7 +529,7 @@ EXIT:   LD   HL,0000H     ;Ruecksprungadresse fuer RET
 EXIT1:  XOR  A
         LD   (COMLEN),A   ;auf Laenge=0 setzen
         OUT  (P1E),A      ;AC1-Mode
-        OUT  (P11),A      ;Modul_1 - ggf. EPROMs ausblenden
+        OUT  (P14),A      ;Modul_1 - ggf. EPROMs ausblenden
         LD   HL,(OLDNMI)
         LD   (BREAK),HL   ;alten NMI wiederherstellen
         LD   A,03H
@@ -1251,7 +1250,7 @@ SECTRN: LD   H,B
 ;
 READ:   LD   C,02H
         LD   A,04H
-        DEFB 21H          ;LD HL,063EH mit nxt. Befehl!!! - DUMMY
+        DEFB 21H          ;LD HL,063EH mit nxt. Befehl!!!
 WRITE:  LD   A,06H        ;DUMMY fuer READ
         LD   (RWBYTE),A   ;hier geht es fuer READ weiter!
         LD   A,C
@@ -1329,8 +1328,8 @@ TXTRDI: DEFM " =>INIT.."
 TXTRDO: DEFM "OK"
         DEFB 0
 ;
-TXTRDE: DEFM "*** RFL ERROR! ***"
-        DEFB 0DH,0AH,0DH,0AH
+TXTRDE: DEFM "RFL ERROR!"
+        DEFB 0DH,0AH
         DEFB 0
 ;
 RDTEST: XOR  A            ;Kapazitaet der RAM-Disk testen
@@ -1959,12 +1958,9 @@ INTEND: EI                ;ist zusaetzlich Einsprungpunkt fuer nicht genutzte In
 ;
 ;-------------  R/W GIDE HW  -----------------------------------------------------------
 
-WAIRDY: IN   A,(P8F)      ;Command / Status
+GIDERW: IN   A,(P8F)      ;Command / Status
         RLA               ;Bit 0 = CY
-        JR   C,WAIRDY     ;wait for hard disk ready (non-busy)
-        RET
-
-GIDERW: CALL WAIRDY
+        JR   C,GIDERW     ;wait for hard disk ready (non-busy)
         LD   L,19H
         CALL LF002
         LD   C,A
@@ -2019,7 +2015,9 @@ LF34B:  IN   A,(P8F)      ;Command / Status
 ;
 LF35D:  LD   A,30H        ;Write Sector
         OUT  (P8F),A      ;Command / Status
-LF361:  CALL WAIRDY
+LF361:  IN   A,(P8F)      ;Command / Status
+        RLA               ;Bit 0 = CY
+        JR   C,LF361      ;wait for hard disk ready (non-busy)
 LF366:  IN   A,(P8F)      ;Command / Status
         BIT  3,A
         JR   Z,LF366      ;wait resp. DRQ active.
@@ -2028,7 +2026,9 @@ LF366:  IN   A,(P8F)      ;Command / Status
         OTIR             
         OTIR              ;512 bytes gesamt schreiben 
 ;        
-LF376:  CALL WAIRDY
+LF376:  IN   A,(P8F)      ;Command / Status
+        RLA               ;Bit 0 = CY
+        JR   C,LF376      ;wait for hard disk ready (non-busy)
         IN   A,(P8F)      ;Command / Status
         AND  89H          ;10001001b - busy, DRQ, or error?
         RET  Z            ;no: all is fine, mit A=0
@@ -2041,9 +2041,7 @@ LF376:  CALL WAIRDY
         DEFM "CONIN-ZBIOS-STACK==26BYTES"
         DEFM "CONIN-ZBIOS-STACK==26BYTES"
 CINSP:  DEFM "CONOUT-STACK_CONOUT-STACK_CONOUT-STACK"
-COUTSP: DEFM "LOAD-ZBIOS-STACK=48BYTES"
-        DEFM "LOAD-ZBIOS-STACK=48BYTES"
-        DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
+COUTSP: DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
 CPMSTK: NOP
 ;
 ;****************  Ende CP/M StackBereich  *******************
@@ -2153,7 +2151,7 @@ P04     EQU  04H          ;PIO_A-Daten
 P05     EQU  05H          ;PIO_B-Daten
 P06     EQU  06H          ;PIO_A-Control
 ;
-P11     EQU  11H          ;Modul_1 - ggf. EPROMs ausblenden
+P14     EQU  14H          ;Modul_1 - ggf. EPROMs ausblenden
 ;
 P1E     EQU  1EH          ;CP/M - Umschalter
 ;
