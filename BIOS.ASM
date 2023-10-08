@@ -1,8 +1,8 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 09.08.2023  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 19.08.2023  *
 ; *                                                         *
-; *                                                  V.137  *
+; *                                                  V.138  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -29,13 +29,6 @@
 ; - nicht benutzte "Arbeitszellen" am Ende auskommentiert (V.135)
 ; - automatische Erkennung der RAM-Disk Groesse 256k/1024k/2048k (V.136)
 ;
-        IF1
-        .PRINTX 'PASS 1'
-        ENDIF
-;
-        IF2
-        .PRINTX 'PASS 2'
-        ENDIF
 ;
         .CREF
         .Z80
@@ -338,7 +331,7 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
         DEFM "11.01.89 FA-MODE "
-        DEFM "vom 09.08.2023 V.137"
+        DEFM "vom 09.08.2023 V.138"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -2165,3 +2158,4 @@ P8F     EQU  8FH          ;GIDE Command/Status
         .DEPHASE
         END
 ;
+
