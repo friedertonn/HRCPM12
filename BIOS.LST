@@ -1,0 +1,2276 @@
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   1
+BIOS    ASM
+
+    1                   ; ***********************************************************
+    2                   ; *                                                         *
+    3                   ; *  HRCPM12-BIOS fuer den AC1      Version vom 19.08.2023  *
+    4                   ; *                                                         *
+    5                   ; *                                                  V.138  *
+    6                   ; *                                                         *
+    7                   ; ***********************************************************
+    8                   ;
+    9                   ; Korrekturen/Fehlerbehebungen am HRCPM12:
+   10                   ; - alle nicht genutzten Programmteile (HRDOS?) entfernt
+   11                   ; - LOAD(Turbo) entfernt
+   12                   ; - BWS(Farb)Init geaendert
+   13                   ; - ^G BEEP + PUNCH:=V24out + LIST:=V24out zugefuegt
+   14                   ; - keine Pruefsumme, kein Vergleichslesen v. RAM-Disk (entfernt)
+   15                   ; - fehlerhafte Maskierung USER in WBOOT entfernt
+   16                   ; - Kursorblinken im Texteditor
+   17                   ; - Consolenkommandos Kursor-ON / Kursor-OFF
+   18                   ; - RAM-Disk mit 64 REC/TRK, Systemspur 16k -> 8k, dadurch 8k mehr f. Daten
+   19                   ; - GIDE-Laufwerke (C:, D:, E:) auf 8MB, da nicht alle BDOS'se mit mehr
+   20                   ;   als 16 Bit fuer REC-NR. zurechtkommen.
+   21                   ; - Formatierung RAM-Disk: letzter Sektor wurde nicht formatiert
+   22                   ; - falsche I/O-Adresse von Modul1
+   23                   ;
+   24                   ; Neu hinzugekommen:
+   25                   ; - EXIT loescht CCPPUFLEN (V.132)
+   26                   ; - WBOOT loescht CCPPUFLEN, weil in Systemspur "aktiver Befehl" (V.133)
+   27                   ; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero) (V.133)
+   28                   ; - Tastaturpuffer von FFD0h -> FF00h , "d"-Befehl ueberschrieben (V.134)
+   29                   ; - nicht benutzte "Arbeitszellen" am Ende auskommentiert (V.135)
+   30                   ; - automatische Erkennung der RAM-Disk Groesse 256k/1024k/2048k (V.136)
+   31                   ;
+   32                   ;
+   33                           .CREF
+   34                           .Z80
+   35                   ;
+   36                           .PHASE 0E600H
+   37                   ;
+   38                   ;
+   39         07F1      OUTHL   EQU  07F1H
+   40         01A5      RSA     EQU  01A5H        ;CPU-Register nach RSA - nicht Monitor 11 !
+   41         05CE      REGIST  EQU  05CEH        ;Registeranzeige - nicht Monitor 11 !
+   42         0DF9      MV24A   EQU  0DF9H        ;MO-UP V24-Out
+   43                   ;
+   44                   ;
+   45         1800      CUPOS   EQU  1800H
+   46         1818      BREAK   EQU  1818H        ;NMI Sprungziel
+   47         181F      CBWSB   EQU  181FH        ;Merkzelle fuer das Farbbyte im AC1-Monitor 
+   48                   ;                         ;0=kein Color-BWS, sonst der eingestellte Farbwert
+   49         185B      ARG1    EQU  185BH
+   50         185D      ARG2    EQU  185DH
+   51                   ;
+   52                   ;
+   53         0000      WARMBT  EQU  0000H        ;WBOOT der Grundseite
+   54         0005      BDOSF   EQU  0005H        ;BDOS-Aufruf + TPA-MAX
+   55         0038      RST38   EQU  0038H        ;CP/M-Break
+   56         0066      NMI     EQU  0066H
+   57                   ;
+   58                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   2
+BIOS    ASM
+
+   59         0003      IOBYTE  EQU  0003H
+   60         0004      LWBYTE  EQU  0004H        ;LW (Bit0-3) + USER Nr.(Bit4-7)
+   61                   ;
+   62         FF00      ZEIPUF  EQU  0FF00H       ;1 + 32 Byte Puffer fuer Tastatur
+   63                   ;                          --> war urspruenlich auf 0FFD0H
+   64                   ;                          --> ueberschreibt den "d"-Befehl
+   65                   ;
+   66         D806      BDOS    EQU  0D806H       ;BDOS-EinsprungAdresse
+   67         E603      WBOOTB  EQU  0E603H       ;BIOS-Eisprung WBOOT
+   68                   ;
+   69                   ;
+   70         C000      HPRDSK  EQU  0C000H       ;Hilfsprogramm: Format RAM-Disk
+   71         D000      CCP     EQU  0D000H       ;Start CCP
+   72         D007      COMLEN  EQU  CCP+07       ;CCP-Kommandopuffer-Laenge
+   73                   ;
+   74         00E0      PE0     EQU  0E0H         ;Grundadresse der RAM-Disk
+   75         00F0      PF0     EQU  0F0H         ;BWS-CPLD-(Steuer)Port
+   76                   ;
+   77         0040      CFDC    EQU  40H          ;Hauptstatusregister FDC
+   78         0041      DFDC    EQU  41H          ;Datenport FDC
+   79         0043      WAIT    EQU  43H          ;IO-Adr. /WAIT Monoflop
+   80         0045      LATCH   EQU  45H          ;IO-Adr. Latch 74LS175
+   81                   ;
+   82         000F      CUZEI   EQU  0FH          ;KursorSymbol
+   83                   ;
+   84                   ;============================================================================
+   85                   ;
+   86 E600  C3 E864             JP   BOOT
+   87 E603  C3 E928             JP   WBOOT
+   88 E606  C3 EA4F             JP   CONST
+   89 E609  C3 EA57             JP   CONIN
+   90 E60C  C3 EACF             JP   CONOUT
+   91 E60F  C3 EAA6             JP   LIST
+   92 E612  C3 EAC2             JP   PUNCH
+   93 E615  C3 EA57             JP   CONIN        ;eigentlich JP READER
+   94 E618  C3 EE04             JP   HOME
+   95 E61B  C3 EDE5             JP   SELDSK
+   96 E61E  C3 EE07             JP   SETTRK
+   97 E621  C3 EE0C             JP   SETSEC
+   98 E624  C3 EE11             JP   SETDMA
+   99 E627  C3 EE22             JP   READ
+  100 E62A  C3 EE27             JP   WRITE
+  101 E62D  C3 EDE2             JP   LISTST
+  102 E630  C3 EE16             JP   SECTRN
+  103                   ;
+  104 E633  43 38 35 41         DEFM 'C85AC'      ;fuer PC/BC Progr.
+  105 E638  C3 E9B0             JP   EXIT         ;User-Kommando EXIT
+  106 E63B  C3 EFE6             JP   LOAD         ;User-Kommando LOAD
+  107 E63E  C3 0000             JP   0000H
+  108                   ;
+  109 E641  07          NDISK:  DEFB 7            ;Anzahl der LW = 7
+  110                   ;
+  111 E642  E644        DPHX:   DEFW DPHY         ;Zeiger auf den 1. Block?
+  112 E644  E652        DPHY:   DEFW DPH0         ;DPH von LW A:
+  113 E646  E662                DEFW DPH1         ;DPH von LW B:
+  114 E648  E672                DEFW DPH2         ;DPH von LW C:
+  115 E64A  E682                DEFW DPH3         ;DPH von LW D:
+  116 E64C  E692                DEFW DPH4         ;DPH von LW E:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   3
+BIOS    ASM
+
+  117 E64E  E6A2                DEFW DPH5         ;DPH von LW F:
+  118 E650  E6B2                DEFW DPH6         ;DPH von LW G:
+  119                   ;
+  120 E652  0000        DPH0:   DEFW 0            ;RAM-Disk A:
+  121 E654  0000                DEFW 0
+  122 E656  0000                DEFW 0
+  123 E658  0000                DEFW 0
+  124 E65A  F83F                DEFW DIRBF
+  125 E65C  E6C4                DEFW DPB0
+  126 E65E  0000                DEFW 0            ;weil nichtwechselbares Medium
+  127 E660  F8BF                DEFW ALL00
+  128                   ;
+  129 E662  0000        DPH1:   DEFW 0            ;Floppy B:
+  130 E664  0000                DEFW 0
+  131 E666  0000                DEFW 0
+  132 E668  0000                DEFW 0
+  133 E66A  F83F                DEFW DIRBF
+  134 E66C  E6D5                DEFW DPB1
+  135 E66E  FDCD                DEFW CHK01
+  136 E670  F93F                DEFW ALL01
+  137                   ;
+  138 E672  0000        DPH2:   DEFW 0            ;GIDE C:
+  139 E674  0000                DEFW 0
+  140 E676  0000                DEFW 0
+  141 E678  0000                DEFW 0
+  142 E67A  F83F                DEFW DIRBF
+  143 E67C  E6F1                DEFW DPB2
+  144 E67E  0000                DEFW 0            ;weil nichtwechselbares Medium
+  145 E680  F971                DEFW ALL02
+  146                   ;
+  147 E682  0000        DPH3:   DEFW 0            ;GIDE D:
+  148 E684  0000                DEFW 0
+  149 E686  0000                DEFW 0
+  150 E688  0000                DEFW 0
+  151 E68A  F83F                DEFW DIRBF
+  152 E68C  E70D                DEFW DPB3
+  153 E68E  0000                DEFW 0            ;weil nichtwechselbares Medium
+  154 E690  FB69                DEFW ALL03
+  155                   ;
+  156 E692  0000        DPH4:   DEFW 0            ;GIDE E:
+  157 E694  0000                DEFW 0
+  158 E696  0000                DEFW 0
+  159 E698  0000                DEFW 0
+  160 E69A  F83F                DEFW DIRBF
+  161 E69C  E729                DEFW DPB4
+  162 E69E  0000                DEFW 0            ;weil nichtwechselbares Medium
+  163 E6A0  FC69                DEFW ALL04
+  164                   ;
+  165 E6A2  0000        DPH5:   DEFW 0            ;Floppy F:
+  166 E6A4  0000                DEFW 0
+  167 E6A6  0000                DEFW 0
+  168 E6A8  0000                DEFW 0
+  169 E6AA  F83F                DEFW DIRBF
+  170 E6AC  E745                DEFW DPB5
+  171 E6AE  FDED                DEFW CHK05
+  172 E6B0  FD69                DEFW ALL05
+  173                   ;
+  174 E6B2  0000        DPH6:   DEFW 0            ;Floppy G:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   4
+BIOS    ASM
+
+  175 E6B4  0000                DEFW 0
+  176 E6B6  0000                DEFW 0
+  177 E6B8  0000                DEFW 0
+  178 E6BA  F83F                DEFW DIRBF
+  179 E6BC  E761                DEFW DPB6
+  180 E6BE  FE0D                DEFW CHK06
+  181 E6C0  FD9B                DEFW ALL06
+  182                   ;
+  183                   ; https://hc-ddr.hucki.net/wiki/doku.php/cpm/write_a_bios/teil_1
+  184                   ;
+  185 E6C2  EE4E                DEFW RDSKRW       ;Routine zum Lesen/Schreiben der RAM-Disk
+  186                   ;
+  187                   ;RAM-Disk 256 KByte
+  188 E6C4  0040        DPB0:   DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
+  189 E6C6  03                  DEFB 3            ;Blockgroesse = 1 Kbyte
+  190 E6C7  07                  DEFB 7
+  191 E6C8  00                  DEFB 0            ;8-Bit Blockadressen im FCB/DIR, da weniger als 255 Bloecke
+  192 E6C9  00F7                DEFW 247          ;248 * 1 Kbyte-Bloecke  -> 256k-8k(System)=248k(CP/M) ( - 2k(DIR) -> 246k (NETTO f. Daten))
+  193 E6CB  003F                DEFW 63           ;64 DIR - Eintaege
+  194 E6CD  00C0                DEFW 0C0H         ;2 DIR-Bloecke
+  195 E6CF  0000                DEFW 0            ;weil nichtwechselbares Medium
+  196 E6D1  0001                DEFW 1            ;8 Kbyte System / Track-Offset
+  197                   ;
+  198 E6D3  F006                DEFW LF019        ;? Blocking / Deblocking
+  199                   ;
+  200                   ;Floppy 780 KByte
+  201 E6D5  0050        DPB1:   DEFW 80           ;80 Sectoren/Track
+  202 E6D7  04                  DEFB 4            ;Blockgroesse = 2 Kbyte
+  203 E6D8  0F                  DEFB 15
+  204 E6D9  00                  DEFB 0
+  205 E6DA  0185                DEFW 389          ;390 * 2 Kbyte - Bloecke
+  206 E6DC  007F                DEFW 127          ;128 DIR - Eintraege
+  207 E6DE  00C0                DEFW 0C0H         ;2 DIR-Bloecke
+  208 E6E0  0020                DEFW 32
+  209 E6E2  0002                DEFW 2            ;20 Kbyte System
+  210                   ;
+  211 E6E4  03 07 05 25         DEFB 3,7,5,25H
+  212 E6E8  50 00 43 FF         DEFB 50H,0,43H,0FFH
+  213 E6EC  E1 33 FF            DEFB 0E1H,33H,0FFH
+  214                   ;
+  215 E6EF  F002                DEFW LF015        ;? Blocking / Deblocking
+  216                   ;
+  217                   ;GIDE 8 MByte
+  218 E6F1  0800        DPB2:   DEFW 2048         ;2048 Records/Track = 256k/Trk
+  219 E6F3  05                  DEFB 5
+  220 E6F4  1F                  DEFB 31           ;4k Bloecke
+  221 E6F5  01                  DEFB 1            ;16-Bit Blockadressen im FCB/DIR
+  222 E6F6  07BF                DEFW 1983         ;1984 * 4k-Bloecke = 7936k
+  223 E6F8  07FF                DEFW 2047         ;2048 DIR-Eintraege
+  224 E6FA  FFFF                DEFW 0FFFFH       ;16 DIR-Bloecke = 64 k
+  225 E6FC  0000                DEFW 0            ;weil nichtwechselbares Medium
+  226 E6FE  0001                DEFW 1            ;1 Trk = 256k System
+  227                   ;
+  228 E700  02 03 A0            DEFB 2,3,0A0H     ;?,?, add constant bits fuer Kopf-Register ?
+  229 E703  000A                DEFW 000AH        ;10 = 1. Zylinder-Nr. phys. LW, wo BDOS-LW beginnt
+  230 E705  0040                DEFW 0040H        ;64 Zyl. f. 16 MB LW-Groesse
+  231 E707  03D8                DEFW 03D8H        ;984 Zylinder HDD
+  232 E709  10                  DEFB 10H          ;16 Koepfe HDD
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   5
+BIOS    ASM
+
+  233 E70A  20                  DEFB 20H          ;32 Sektoren/Spur HDD
+  234                   ;
+  235 E70B  F002                DEFW LF015        ;? Blocking / Deblocking
+  236                   ;
+  237                   ;GIDE 8 MByte
+  238 E70D  0800        DPB3:   DEFW 2048         ;2048 Records/Track = 256k/Trk
+  239 E70F  06                  DEFB 6
+  240 E710  3F                  DEFB 63           ;8k Bloecke
+  241 E711  03                  DEFB 3            ;16Bit Blockadressen im FCB/DIR
+  242 E712  03FF                DEFW 1023         ;1024 * 8k-Bloecke = 8192k = 8M
+  243 E714  0FFF                DEFW 4095         ;4096 DIR-Eintraege
+  244 E716  FFFF                DEFW 0FFFFH       ;16 DIR-Bloecke
+  245 E718  0000                DEFW 0            ;weil nichtwechselbares Medium
+  246 E71A  0000                DEFW 0            ;kein System-Track
+  247                   ;
+  248 E71C  02 03 A0            DEFB 2,3,0A0H     ;?,?, add constant bits fuer Kopf-Register ?
+  249 E71F  0096                DEFW 0096H        ;150 = 1. Zylinder-Nr. phys. LW, wo BDOS-LW beginnt
+  250 E721  0040                DEFW 0040H        ;64 Zyl. f. 16 MB LW-Groesse
+  251 E723  03D8                DEFW 03D8H        ;984 Zylinder HDD
+  252 E725  10                  DEFB 10H          ;16 Koepfe HDD
+  253 E726  20                  DEFB 20H          ;32 Sektoren/Spur HDD
+  254                   ;
+  255 E727  F002                DEFW LF015        ;? Blocking / Deblocking
+  256                   ;
+  257                   ;GIDE 8 MByte
+  258 E729  0800        DPB4:   DEFW 2048         ;2048 Records/Track = 256k/Trk
+  259 E72B  06                  DEFB 6
+  260 E72C  3F                  DEFB 63           ;8k Bloecke
+  261 E72D  03                  DEFB 3            ;16Bit Blockadressen im FCB/DIR
+  262 E72E  03FF                DEFW 1023         ;1024 * 8k-Bloecke = 8192k = 8M
+  263 E730  0FFF                DEFW 4095         ;4096 DIR-Eintraege
+  264 E732  FFFF                DEFW 0FFFFH       ;16 DIR-Bloecke
+  265 E734  0000                DEFW 0            ;weil nichtwechselbares Medium
+  266 E736  0000                DEFW 0            ;kein System-Track
+  267                   ;
+  268 E738  02 03 A0            DEFB 2,3,0A0H     ;?,?, add constant bits fuer Kopf-Register ?
+  269 E73B  012C                DEFW 012CH        ;300 = 1. Zylinder-Nr. phys. LW, wo BDOS-LW beginnt
+  270 E73D  0040                DEFW 0040H        ;64 Zyl. f. 16 MB LW-Groesse
+  271 E73F  03D8                DEFW 03D8H        ;984 Zylinder HDD
+  272 E741  10                  DEFB 10H          ;16 Koepfe HDD
+  273 E742  20                  DEFB 20H          ;32 Sektoren/Spur HDD
+  274                   ;
+  275 E743  F006                DEFW LF019        ;? Blocking / Deblocking
+  276                   ;
+  277                   ;Floppy 640 KByte
+  278 E745  0040        DPB5:   DEFW 64           ;64 Sectoren/Track
+  279 E747  04                  DEFB 4            ;Blockgroesse = 2 Kbyte
+  280 E748  0F                  DEFB 15
+  281 E749  00                  DEFB 0
+  282 E74A  013F                DEFW 319          ;320 * 2 Kbyte - Bloecke
+  283 E74C  007F                DEFW 127          ;128 DIR - Eintraege
+  284 E74E  00C0                DEFW 0C0H         ;2 DIR-Bloecke
+  285 E750  0020                DEFW 32
+  286 E752  0000                DEFW 0            ;kein System-Track
+  287                   ;
+  288 E754  01 01 10 14         DEFB 1,1,10H,14H
+  289 E758  50 00 43 FF         DEFB 50H,0,43H,0FFH
+  290 E75C  E1 33 FF            DEFB 0E1H,33H,0FFH
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   6
+BIOS    ASM
+
+  291                   ;
+  292 E75F  F006                DEFW LF019        ;? Blocking / Deblocking
+  293                   ;
+  294                   ;Floppy 800 KByte
+  295 E761  0050        DPB6:   DEFW 80           ;80 Sectoren/Track
+  296 E763  04                  DEFB 4            ;Blockgroesse = 2 Kbyte
+  297 E764  0F                  DEFB 15
+  298 E765  00                  DEFB 0
+  299 E766  018F                DEFW 399          ;400 * 2 Kbyte - Bloecke
+  300 E768  007F                DEFW 127          ;128 DIR - Eintraege
+  301 E76A  00C0                DEFW 0C0H         ;2 DIR-Bloecke
+  302 E76C  0020                DEFW 32
+  303 E76E  0000                DEFW 0            ;kein System-Track
+  304                   ;
+  305 E770  03 07 05 25         DEFB 3,7,5,25H
+  306 E774  50 01 43 FF         DEFB 50H,1,43H,0FFH
+  307 E778  E1 33 FF            DEFB 0E1H,33H,0FFH
+  308                   ;
+  309                   ;RAM-Disk 1024 KByte
+  310 E77B  0040        DP1024: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
+  311 E77D  04                  DEFB 4            ;Blockgroesse = 2 Kbyte
+  312 E77E  0F                  DEFB 15
+  313 E77F  00                  DEFB 0            ;16-Bit Blockadressen im FCB/DIR, da mehr als 255 Bloecke
+  314 E780  01FB                DEFW 507          ;508 * 2 Kbyte-Bloecke  -> 1024k-8k(System)=1016k(CP/M) ( - 4k(DIR) -> 1012k (NETTO f. Daten))
+  315 E782  007F                DEFW 127          ;128 DIR - Eintraege -> bei 64 DIR-Eintraegen bekommt man die RAM-Disk nicht voll
+  316 E784  00C0                DEFW 0C0H         ;2 DIR-Bloecke
+  317 E786  0000                DEFW 0            ;weil nichtwechselbares Medium
+  318 E788  0001                DEFW 1            ;8 Kbyte System / Track-Offset
+  319                   ;
+  320                   ;RAM-Disk 2048 KByte
+  321 E78A  0040        DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
+  322 E78C  04                  DEFB 4            ;Blockgroesse = 2 Kbyte
+  323 E78D  0F                  DEFB 15
+  324 E78E  00                  DEFB 0            ;16-Bit Blockadressen im FCB/DIR, da mehr als 255 Bloecke
+  325 E78F  03FB                DEFW 1019         ;1020 * 2 Kbyte-Bloecke  -> 2048k-8k(System)=2040k(CP/M) ( - 8k(DIR) -> 2032k (NETTO f. Daten))
+  326 E791  00FF                DEFW 255          ;256 DIR - Eintraege
+  327 E793  00F0                DEFW 0F0H         ;4 DIR-Bloecke
+  328 E795  0000                DEFW 0            ;weil nichtwechselbares Medium
+  329 E797  0001                DEFW 1            ;8 Kbyte System / Track-Offset
+  330                   ;
+  331 E799  0C          TXT01:  DEFB 0CH
+  332 E79A  48 52 43 50         DEFM "HRCPM AC1 V1.2 CPA "
+  333 E7AD  31 31 2E 30         DEFM "11.01.89 FA-MODE "
+  334 E7BE  76 6F 6D 20         DEFM "vom 09.08.2023 V.138"
+  335 E7D2  0D 0A 0D 0A         DEFB 0DH,0AH,0DH,0AH
+  336 E7D6  47 49 44 45         DEFM "GIDE(80H) C0:8MB,"
+  337 E7E7  20 20 20 44         DEFM "   D0: 8MB   E0: 8MB"
+  338 E7FB  0D 0A               DEFB 0DH,0AH
+  339 E7FD  46 44 43 20         DEFM "FDC (45H) B0:5*1024"   ;B0 --> Floppy-Drive 0,
+  340 E810  20 46 30 3A         DEFM " F0:16*256 G1:5*1024"  ;F0 --> Floppy-Drive 0, G1 --> Floppy-Drive 1
+  341 E824  0D 0A 0D 0A         DEFB 0DH,0AH,0DH,0AH
+  342 E828  52 46 4C 20         DEFM "RFL Praeci.Port E0H"
+  343 E83B  20 41 3A 20         DEFM " A: "
+  344 E83F  00                  DEFB 0
+  345 E840  32 35 36 6B TXT01A: DEFM "256k"
+  346 E844  00                  DEFB 0
+  347 E845  31 30 32 34 TXT01B: DEFM "1024k"
+  348 E84A  00                  DEFB 0
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   7
+BIOS    ASM
+
+  349 E84B  32 30 34 38 TXT01C: DEFM "2048k"
+  350 E850  00                  DEFB 0
+  351 E851  20 2D 2D 3E TXT02:  DEFM " --> Format A:(J)?"
+  352 E863  00                  DEFB 0
+  353                   ;
+  354                   ;******************************   BOOT   *******************************
+  355                   ;
+  356 E864  F3          BOOT:   DI
+  357 E865  31 F3F7             LD   SP,CPMSTK
+  358 E868  AF                  XOR  A
+  359 E869  D3 1E               OUT  (P1E),A      ;zwingend AC1-Mode !!
+  360 E86B  32 F41A             LD   (LATPU),A    ;FDC-Latch zuruecksetzen
+  361 E86E  CD EDAC             CALL BWSINI
+  362 E871  DB 05               IN   A,(P05)
+  363 E873  CB 9F               RES  3,A          ;BildInvers (PIO1B) Bit3 aus
+  364 E875  D3 05               OUT  (P05),A
+  365 E877  2A 1818             LD   HL,(BREAK)   ;Sprungtabelle NMI MONITOR
+  366 E87A  22 F406             LD   (OLDNMI),HL  ;sichern
+  367 E87D  21 E603             LD   HL,WBOOTB    ;CP/M-Warmstart-Einsprungadresse
+  368 E880  22 1818             LD   (BREAK),HL
+  369 E883  CD E9A5             CALL CPMMOD
+  370 E886  AF                  XOR  A
+  371 E887  32 F43A             LD   (DF51A),A
+  372 E88A  32 0003             LD   (IOBYTE),A
+  373 E88D  32 0004             LD   (LWBYTE),A
+  374 E890  32 FF00             LD   (ZEIPUF),A
+  375 E893  CD E981             CALL BOOT1        ;CP/M "Grundseite" INIT
+  376                   ;
+  377 E896  3E 03               LD   A,03H        ;CTC init. + Interrupt abgeschaltet
+  378 E898  D3 00               OUT  (P00),A
+  379 E89A  D3 01               OUT  (P01),A
+  380 E89C  D3 02               OUT  (P02),A
+  381 E89E  D3 03               OUT  (P03),A
+  382 E8A0  3E FF               LD   A,0FFH       ;HWT vom Interruptvektor 0FF80h ff.
+  383 E8A2  ED 47               LD   I,A
+  384 E8A4  ED 5E               IM   2            ;Interrupt freigeben
+  385 E8A6  21 F2F2             LD   HL,INTEND    ;Adresse Einsprungpunkt fuer nicht verwendete Interrupts
+  386 E8A9  22 FF80             LD   (DFF80),HL   ;Prog. Einsprung IV fuer CTC-Kanal 0
+  387 E8AC  22 FF82             LD   (DFF82),HL   ;Prog. Einsprung IV fuer CTC-Kanal 1
+  388 E8AF  22 FF84             LD   (DFF84),HL   ;Prog. Einsprung IV fuer CTC-Kanal 2
+  389 E8B2  21 F2D7             LD   HL,ISRCTC    ;Einsprungpunkt CTC-Interrupt - Steuerung Nachlauf Floppy-LW
+  390 E8B5  22 FF86             LD   (DFF86),HL   ;Prog. Einsprung IV fuer CTC-Kanal 3
+  391 E8B8  3E 80               LD   A,80H
+  392 E8BA  D3 00               OUT  (P00),A      ;CTC-Interruptadresse NWT (= 80h) eintragen
+  393 E8BC  3E FF               LD   A,0FFH
+  394 E8BE  32 F419             LD   (CTCCNT),A   ;Init. CTC-Counter = 255 --> Zusatzzaehler fuer CTC-Interrupt
+  395 E8C1  3E A7               LD   A,0A7H
+  396 E8C3  D3 03               OUT  (P03),A      ;Programmierung der CTC K3 als Zeitgeber mit Interrupt, Vorteiler 256
+  397 E8C5  AF                  XOR  A
+  398 E8C6  D3 03               OUT  (P03),A      ;Programmierung der CTC K3 - Hauptteiler = 256
+  399                                             ;d.h. bei 2 MHz CPU-Takt wird alle 33ms ein CTC-Interrupt ausgeloest
+  400                   ;
+  401 E8C8  21 E9D7             LD   HL,ISRTAS    ;1. Einsprungpunkt PIO-Interrupt --> Taste in Tastaturpuffer schreiben
+  402 E8CB  22 FF88             LD   (DFF88),HL   ;auf 0FF88h eintragen
+  403 E8CE  21 EA2A             LD   HL,ISRPA     ;2. Einsprungpunkt PIO-Interrupt --> weitere PIO_1A-Interrupts "ignorieren"
+  404 E8D1  22 FF8A             LD   (DFF8A),HL   ;auf 0FF8Ah eintragen
+  405 E8D4  01 0506             LD   BC,0506H     ;5 Bytes auf Controlkanal PIO1 A
+  406 E8D7  21 EA38             LD   HL,PIO1TAB
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   8
+BIOS    ASM
+
+  407 E8DA  ED B3               OTIR              ;PIO1_A Init. fuer 1. Einsprungpunkt
+  408                   ;
+  409 E8DC  21 E799             LD   HL,TXT01     ;Begruessungstext
+  410 E8DF  CD EA3F             CALL OUTTXT
+  411                   ;
+  412 E8E2  CD EEA9             CALL RDTEST       ;Kapazitaet der RAM-Disk bestimmen
+  413 E8E5  21 EF01             LD   HL,RDSIZE    ;RD-Size: 0=256K 1=1024K 2=2048K
+  414 E8E8  7E                  LD   A,(HL)
+  415 E8E9  21 E78A             LD   HL,DP2048    ;DPB 2048K RAM-Disk
+  416 E8EC  FE 02               CP   2
+  417 E8EE  28 09               JR   Z,BOOT2
+  418 E8F0  21 E77B             LD   HL,DP1024    ;DPB 1024K RAM-Disk
+  419 E8F3  FE 01               CP   1
+  420 E8F5  28 02               JR   Z,BOOT2
+  421 E8F7  18 08               JR   BOOT3        ;256K RAM-Disk, nichts kopieren
+  422                   ;        
+  423 E8F9  11 E6C4     BOOT2:  LD   DE,DPB0
+  424 E8FC  01 000F             LD   BC,15
+  425 E8FF  ED B0               LDIR
+  426 E901  21 E840     BOOT3:  LD   HL,TXT01A    ;256k
+  427 E904  FE 00               CP   0
+  428 E906  28 0A               JR   Z,BOOT4
+  429 E908  21 E845             LD   HL,TXT01B    ;1024k
+  430 E90B  FE 01               CP   1
+  431 E90D  28 03               JR   Z,BOOT4
+  432 E90F  21 E84B             LD   HL,TXT01C    ;2048k
+  433 E912  CD EA3F     BOOT4:  CALL OUTTXT
+  434 E915  21 E851             LD   HL,TXT02     ;Formatieren? (J)
+  435 E918  CD EA3F             CALL OUTTXT
+  436 E91B  FB                  EI
+  437 E91C  CD EA57             CALL CONIN
+  438 E91F  CB AF               RES  5,A          ;Grossbuchstaben
+  439 E921  FE 4A               CP   4AH          ;J --> RAM-Disk formatieren
+  440 E923  CC EF02             CALL Z,RDFORM
+  441 E926  18 22               JR   WBOOT1
+  442                   ;
+  443                   ;*******************************   WBOOT   *****************************
+  444                   ;
+  445 E928  31 F3F7     WBOOT:  LD   SP,CPMSTK
+  446 E92B  CD E9A5             CALL CPMMOD
+  447 E92E  3A F43B             LD   A,(DF51B)
+  448 E931  B7                  OR   A
+  449 E932  C4 F0BB             CALL NZ,LF0CE
+  450 E935  06 2C               LD   B,2CH        ;44 Records CCP+BDOS
+  451 E937  21 EE22             LD   HL,READ
+  452 E93A  22 EF8E             LD   (WRCCP2),HL
+  453 E93D  CD EF74             CALL WRCCP        ;wirklich READCCP !
+  454 E940  21 EE27             LD   HL,WRITE
+  455 E943  22 EF8E             LD   (WRCCP2),HL
+  456 E946  AF                  XOR  A
+  457 E947  32 D007             LD   (COMLEN),A   ;auf Laenge=0 setzen
+  458                   ;
+  459 E94A  CD E981     WBOOT1: CALL BOOT1        ;CP/M "Grundseite" INIT
+  460 E94D  3E 01               LD   A,01H        ;Kursor einschalten
+  461 E94F  32 F3FD             LD   (CUFLAG),A
+  462 E952  3A F3FA             LD   A,(COLO2)
+  463 E955  32 F3F8             LD   (COLOR),A    ;Arbeitszelle Farbbyte
+  464 E958  E6 77               AND  77H          ;Intensivdarstellung maskieren
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   9
+BIOS    ASM
+
+  465 E95A  32 F3F9             LD   (COLO1),A    ;Arbeitszelle "Normaldarstellung"
+  466 E95D  3A 0004             LD   A,(LWBYTE)
+  467 E960  4F                  LD   C,A
+  468 E961  CD EDE5             CALL SELDSK
+  469 E964  C3 D000             JP   CCP          ;JP CCP
+  470                   ;
+  471                   ;
+  472 E967  F5          CPMERR: PUSH AF           ;CP/M-Fehler - zurueck z. MONITOR
+  473 E968  E5                  PUSH HL
+  474 E969  CD E9B4             CALL EXIT1
+  475 E96C  DF                  RST  18H
+  476 E96D  20 43 50            DEFM " CP"
+  477 E970  CD                  DEFB 4DH+80H      ;"M+80H
+  478 E971  E1                  POP  HL
+  479 E972  F1                  POP  AF
+  480 E973  CD 01A5             CALL RSA
+  481 E976  E1                  POP  HL
+  482 E977  2B                  DEC  HL
+  483 E978  CD 07F1             CALL OUTHL
+  484 E97B  DF                  RST  18H
+  485 E97C  8D                  DEFB 0DH+80H
+  486 E97D  CD 05CE             CALL REGIST       ;MONI - Registeranzeige - nicht Monitor 11 !
+  487 E980  FF                  RST  38H          ;zurueck zum MONI
+  488                   ;
+  489                   ;
+  490 E981  3E C3       BOOT1:  LD   A,0C3H       ;CP/M "Grundseite" INIT
+  491 E983  32 0000             LD   (WARMBT),A
+  492 E986  32 0005             LD   (BDOSF),A
+  493 E989  32 0038             LD   (RST38),A
+  494 E98C  21 E603             LD   HL,WBOOTB
+  495 E98F  22 0001             LD   (WARMBT+1),HL
+  496 E992  21 D806             LD   HL,BDOS
+  497 E995  22 0006             LD   (BDOSF+1),HL
+  498 E998  21 E967             LD   HL,CPMERR
+  499 E99B  22 0039             LD   (RST38+1),HL
+  500 E99E  21 0080             LD   HL,0080H
+  501 E9A1  22 F421             LD   (DMA),HL
+  502 E9A4  C9                  RET
+  503                   ;
+  504                   ;+++++++++++++++++++++++++++++++++   Ende BOOT / WBOOT   +++++++++++++++++
+  505                   ;
+  506 E9A5  F5          CPMMOD: PUSH AF           ;CP/M EIN
+  507 E9A6  3E 01               LD   A,01H
+  508 E9A8  18 02               JR   MOD1
+  509                   ;
+  510 E9AA  F5          AC1MOD: PUSH AF           ;CP/M AUS (AC1-Mode)
+  511 E9AB  AF                  XOR  A
+  512 E9AC  D3 1E       MOD1:   OUT  (P1E),A
+  513 E9AE  F1                  POP  AF
+  514 E9AF  C9                  RET
+  515                   ;
+  516                   ;--------------------------------------------------------------------------
+  517                   ;
+  518                   ;EXIT - Routine
+  519                   ;
+  520 E9B0  21 0000     EXIT:   LD   HL,0000H     ;Ruecksprungadresse fuer RET
+  521 E9B3  E5                  PUSH HL
+  522 E9B4  AF          EXIT1:  XOR  A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  10
+BIOS    ASM
+
+  523 E9B5  32 D007             LD   (COMLEN),A   ;auf Laenge=0 setzen
+  524 E9B8  D3 1E               OUT  (P1E),A      ;AC1-Mode
+  525 E9BA  D3 14               OUT  (P14),A      ;Modul_1 - ggf. EPROMs ausblenden
+  526 E9BC  2A F406             LD   HL,(OLDNMI)
+  527 E9BF  22 1818             LD   (BREAK),HL   ;alten NMI wiederherstellen
+  528 E9C2  3E 03               LD   A,03H
+  529 E9C4  D3 00               OUT  (P00),A      ;CTC: Interrupts ausschalten
+  530 E9C6  D3 01               OUT  (P01),A
+  531 E9C8  D3 02               OUT  (P02),A
+  532 E9CA  D3 03               OUT  (P03),A
+  533 E9CC  D3 06               OUT  (P06),A      ;PIO1 A: Interrupt auschalten
+  534 E9CE  3E CF               LD   A,0CFH
+  535 E9D0  D3 06               OUT  (P06),A      ;PIO1 A: "Mode 3" + "Set Mode"
+  536 E9D2  3E FF               LD   A,0FFH
+  537 E9D4  D3 06               OUT  (P06),A      ;PIO1 A: PA0 bis PA7 sind Eingaenge
+  538 E9D6  C9                  RET               ;zurueck zum MONITOR, normal
+  539                   ;
+  540                   ;
+  541                   ;Interrupt-Einsprung fuer die Tastatur
+  542                   ;
+  543 E9D7  F3          ISRTAS: DI
+  544 E9D8  F5                  PUSH AF
+  545 E9D9  C5                  PUSH BC
+  546 E9DA  E5                  PUSH HL
+  547 E9DB  DB 04               IN   A,(P04)      ;PIO_A abfragen
+  548 E9DD  CB 7F               BIT  7,A          ;Taste gedrueckt?
+  549 E9DF  28 43               JR   Z,ISREND     ;nein, ISR beenden
+  550 E9E1  4F                  LD   C,A
+  551                   ;
+  552 E9E2  06 1E               LD   B,1EH        ;Tastaturentprellung
+  553 E9E4  DB 04       PRELL1: IN   A,(P04)
+  554 E9E6  B9                  CP   C
+  555 E9E7  20 3B               JR   NZ,ISREND
+  556 E9E9  10 F9               DJNZ PRELL1       ;30 Durchlaeufe
+  557                   ;
+  558 E9EB  FE 80               CP   80H
+  559 E9ED  28 35               JR   Z,ISREND     ;das war eine NULL-Eingabe
+  560 E9EF  21 EA3D             LD   HL,PIO2TAB
+  561 E9F2  01 0206             LD   BC,0206H     ;PIO_A-Control, 2 Bytes
+  562 E9F5  ED B3               OTIR              ;weitere Interrupts "ignorieren"
+  563                   ;
+  564 E9F7  4F                  LD   C,A
+  565 E9F8  21 FF00             LD   HL,ZEIPUF
+  566 E9FB  7E                  LD   A,(HL)       ;Fuellstand Zeichenpuffer
+  567 E9FC  3C                  INC  A
+  568 E9FD  FE 1F               CP   1FH          ;Puffer voll?
+  569 E9FF  28 23               JR   Z,ISREND
+  570 EA01  77                  LD   (HL),A       ;Anzahl der Zeichen im Puffer
+  571 EA02  C5                  PUSH BC
+  572 EA03  4F                  LD   C,A
+  573 EA04  09                  ADD  HL,BC        ;HL = Position im Zeichenpuffer
+  574 EA05  C1                  POP  BC
+  575 EA06  CB B9               RES  7,C          ;7. Bit loeschen und
+  576 EA08  71                  LD   (HL),C       ;Taste in Zeichenpuffer eintragen
+  577                   ;
+  578                   ;       LD   BC,8034H     ;Initialisierung Tastenpiep --> 2 MHz
+  579 EA09  01 8068             LD   BC,8068H     ;Initialisierung Tastenpiep --> 4 MHz
+  580 EA0C  79          BEEP1:  LD   A,C
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  11
+BIOS    ASM
+
+  581 EA0D  3D          BEEP2:  DEC  A
+  582 EA0E  20 FD               JR   NZ,BEEP2
+  583 EA10  DB 05               IN   A,(P05)      ;PIO_B-Daten
+  584 EA12  EE 01               XOR  01H          ;Tastenpiep
+  585 EA14  D3 05               OUT  (P05),A
+  586 EA16  10 F4               DJNZ BEEP1
+  587 EA18  E6 FE               AND  0FEH
+  588 EA1A  D3 05               OUT  (P05),A
+  589                   ;
+  590 EA1C  01 0200             LD   BC,0200H     ;Warteschleife - Entprellung
+  591 EA1F  0B          PRELL2: DEC  BC
+  592 EA20  78                  LD   A,B
+  593 EA21  B1                  OR   C
+  594 EA22  20 FB               JR   NZ,PRELL2
+  595                   ;
+  596 EA24  E1          ISREND: POP  HL
+  597 EA25  C1                  POP  BC
+  598 EA26  F1                  POP  AF
+  599 EA27  FB                  EI
+  600 EA28  ED 4D               RETI
+  601                   ;
+  602                   ;
+  603                   ;2. Interrupt-Einsprung fuer PIO1 Kanal A - Neuinitialisierung der PIO
+  604                   ;
+  605 EA2A  F3          ISRPA:  DI
+  606 EA2B  F5                  PUSH AF
+  607 EA2C  C5                  PUSH BC
+  608 EA2D  E5                  PUSH HL
+  609 EA2E  21 EA38             LD   HL,PIO1TAB
+  610 EA31  01 0506             LD   BC,0506H     ;5 Bytes f. PIO_A-Control
+  611 EA34  ED B3               OTIR
+  612 EA36  18 EC               JR   ISREND
+  613                   ;
+  614 EA38  88 CF FF B7 PIO1TAB: DEFB 88H,0CFH,0FFH,0B7H,7FH  ;PIO 1A: Init.-Tabelle
+  615                   ;  88H --> NWT Interruptvektor --> 0FF88H
+  616                   ; 0CFH --> "Mode 3" + "Set Mode" (kein Handshaking, next Byte = I/O-Zuordnung)
+  617                   ; 0FFH --> PA0 bis PA7 sind Eingaenge
+  618                   ; 0B7H --> Setting Interrupt Control Word --> mit nachfolgender Maskierung
+  619                   ;  7FH --> Bit7=Low --> nur PA7 erzeugt Interrupts
+  620                   ;
+  621 EA3D  8A 87       PIO2TAB: DEFB 8AH,87H     ;PIO 1A: "Ignorieren" weiterer Interrupts
+  622                   ;  8AH --> "Verbiegen" NWT Interruptvektor --> 0FF8A
+  623                   ;  87H --> Setting Interrupt Control Word --> ohne nachfolgende Maskierung
+  624                   ;
+  625                   ;
+  626 EA3F  C5          OUTTXT: PUSH BC
+  627 EA40  F5                  PUSH AF
+  628 EA41  4E          TEXT1:  LD   C,(HL)
+  629 EA42  79                  LD   A,C
+  630 EA43  B7                  OR   A
+  631 EA44  28 06               JR   Z,TEXT2
+  632 EA46  CD EACF             CALL CONOUT
+  633 EA49  23                  INC  HL
+  634 EA4A  18 F5               JR   TEXT1
+  635 EA4C  F1          TEXT2:  POP  AF
+  636 EA4D  C1                  POP  BC
+  637 EA4E  C9                  RET
+  638                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  12
+BIOS    ASM
+
+  639                   ;************************   CONST   *************************
+  640                   ;
+  641 EA4F  3A FF00     CONST:  LD   A,(ZEIPUF)
+  642 EA52  B7                  OR   A
+  643 EA53  C8                  RET  Z
+  644 EA54  3E FF               LD   A,0FFH
+  645 EA56  C9                  RET
+  646                   ;
+  647                   ;***************************   CONIN   ***********************
+  648                   ;
+  649 EA57  F3          CONIN:  DI
+  650 EA58  ED 73 F402          LD   (SPCIN),SP
+  651 EA5C  31 F3A8             LD   SP,CINSP
+  652 EA5F  C5                  PUSH BC
+  653 EA60  D5                  PUSH DE
+  654 EA61  E5                  PUSH HL
+  655 EA62  01 017F             LD   BC,017FH     ;Kursor-Blinker ruecksetzen
+  656 EA65  AF          CONIN1: XOR  A
+  657 EA66  F3                  DI
+  658 EA67  2A FF00             LD   HL,(ZEIPUF)  ;L = Anz. der Zeichen, H = 1. Zeichen
+  659 EA6A  B5                  OR   L
+  660 EA6B  20 20               JR   NZ,CONIN4    ;Zeichen im Tastaturpuffer vorhanden
+  661 EA6D  FB                  EI
+  662 EA6E  10 F5               DJNZ CONIN1       ;256*LOOP: warte auf ein Zeichen
+  663 EA70  3A F3FD             LD   A,(CUFLAG)
+  664 EA73  B7                  OR   A
+  665 EA74  28 EF               JR   Z,CONIN1     ;kein "Kursor-Blinken"
+  666 EA76  F3                  DI
+  667 EA77  CD E9AA             CALL AC1MOD       ;AC1 Mode
+  668 EA7A  2A 1800             LD   HL,(CUPOS)
+  669 EA7D  0C                  INC  C
+  670 EA7E  CB 79               BIT  7,C          ;hier wird die Cursor-Blinkfrequenz festgelegt
+  671 EA80  3A F401             LD   A,(CHAR)     ;bisheriges Zeichen auf der Kursorposition
+  672 EA83  28 02               JR   Z,CONIN3
+  673 EA85  3E 0F               LD   A,CUZEI      ;Kursor = 0FH
+  674 EA87  77          CONIN3: LD   (HL),A       ;"Kursor-Blinken" - Bildschirm-Ausgabe
+  675 EA88  CD E9A5             CALL CPMMOD       ;CP/M Mode
+  676 EA8B  18 D8               JR   CONIN1
+  677                   ;
+  678 EA8D  3D          CONIN4: DEC  A            ;DEC Anzahl_der_Zeichen_im_Tastaturpuffer
+  679 EA8E  32 FF00             LD   (ZEIPUF),A
+  680 EA91  7C                  LD   A,H          ;1. Zeichen aus dem Tastaturpuffer --> A
+  681 EA92  21 FF02             LD   HL,ZEIPUF+2
+  682 EA95  11 FF01             LD   DE,ZEIPUF+1
+  683 EA98  01 001F             LD   BC,001FH
+  684 EA9B  ED B0               LDIR              ;alle Zeichen im Puffer rC<cken 1 Pos. n. links
+  685 EA9D  E1                  POP  HL
+  686 EA9E  D1                  POP  DE
+  687 EA9F  C1                  POP  BC
+  688 EAA0  ED 7B F402          LD   SP,(SPCIN)
+  689 EAA4  FB                  EI
+  690 EAA5  C9                  RET
+  691                   ;
+  692                   ;***************************   LIST   ************************
+  693                   ;
+  694 EAA6  F3          LIST:   DI
+  695 EAA7  CD E9AA             CALL AC1MOD
+  696 EAAA  F5                  PUSH AF      
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  13
+BIOS    ASM
+
+  697 EAAB  79                  LD   A,C
+  698 EAAC  FE 0A               CP   0AH  
+  699 EAAE  28 0C               JR   Z,LEND1  
+  700 EAB0  CD 0DF9             CALL MV24A        ;MONI V24 Ausgabe Akku
+  701 EAB3  FE 0D               CP   0DH     
+  702 EAB5  20 05               JR   NZ,LEND1 
+  703 EAB7  3E 0A               LD   A,0AH   
+  704 EAB9  CD 0DF9             CALL MV24A        ;MONI V24 Ausgabe Akku
+  705 EABC  F1          LEND1:  POP  AF      
+  706 EABD  CD E9A5             CALL CPMMOD
+  707 EAC0  FB                  EI
+  708 EAC1  C9                  RET
+  709                   ;
+  710                   ;***************************   PUNCH   ***********************
+  711                   ;
+  712 EAC2  F3          PUNCH:  DI                ;Ausgabe C nach V24
+  713 EAC3  79                  LD   A,C
+  714 EAC4  CD E9AA             CALL AC1MOD
+  715 EAC7  CD 0DF9             CALL MV24A        ;MONI V24 Ausgabe Akku
+  716 EACA  CD E9A5             CALL CPMMOD
+  717 EACD  FB                  EI
+  718 EACE  C9                  RET
+  719                   ;
+  720                   ;******************************* CONOUT  *********************
+  721                   ;
+  722                   ;       Ausgabe eines Zeichens,   IN: Zeichen in C
+  723                   ;
+  724 EACF  F3          CONOUT: DI
+  725 EAD0  ED 73 F404          LD   (SPCOUT),SP  ;Stack bei MON-Aufruf retten
+  726 EAD4  31 F3CE             LD   SP,COUTSP
+  727 EAD7  F5                  PUSH AF
+  728 EAD8  C5                  PUSH BC
+  729 EAD9  D5                  PUSH DE
+  730 EADA  E5                  PUSH HL
+  731 EADB  CD E9AA             CALL AC1MOD
+  732 EADE  E5                  PUSH HL
+  733 EADF  2A 1800             LD   HL,(CUPOS)   ;Cursorposition
+  734 EAE2  3A F401             LD   A,(CHAR)
+  735 EAE5  77                  LD   (HL),A       ;altes Zeichen auf Position
+  736 EAE6  3A F3FE             LD   A,(STZ00)    ;Durchlauf bei Steuerzeichen?
+  737 EAE9  A7                  AND  A
+  738 EAEA  C2 ED1A             JP   NZ,KONV10    ;NZ= Steuerzeichen 2. oder 3. Durchlauf
+  739 EAED  79                  LD   A,C          ;Byte
+  740 EAEE  FE 20               CP   20H          ;kleinstes Zeichen
+  741 EAF0  38 26               JR   C,KONVTB
+  742 EAF2  FE 7F               CP   7FH          ;groesstes Zeichen
+  743 EAF4  30 22               JR   NC,KONVTB
+  744 EAF6  2A 1800             LD   HL,(CUPOS)
+  745 EAF9  C3 EC57             JP   CCHAR        ;Ausgabe einzelnes Zeichen
+  746                   ;
+  747 EAFC  2A 1800     KONVT9: LD   HL,(CUPOS)
+  748 EAFF  7E                  LD   A,(HL)
+  749 EB00  32 F401             LD   (CHAR),A
+  750 EB03  3A F3FD             LD   A,(CUFLAG)
+  751 EB06  B7                  OR   A
+  752 EB07  28 02               JR   Z,COEN1      ;Kursor nicht darstellen
+  753 EB09  36 0F               LD   (HL),CUZEI
+  754 EB0B  CD E9A5     COEN1:  CALL CPMMOD
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  14
+BIOS    ASM
+
+  755 EB0E  E1                  POP  HL
+  756 EB0F  D1                  POP  DE
+  757 EB10  C1                  POP  BC
+  758 EB11  F1                  POP  AF
+  759 EB12  ED 7B F404          LD   SP,(SPCOUT)
+  760 EB16  FB                  EI
+  761 EB17  C9                  RET
+  762                   ;
+  763                   ;Verzweigung bei Steuerzeichen
+  764                   ;INPUT:  A=Zeichen
+  765                   ;
+  766 EB18  FE 1B       KONVTB: CP   1BH          ;ESC ?
+  767 EB1A  20 07               JR   NZ,KONVT1
+  768 EB1C  3E 02               LD   A,02H        ;wenn ja
+  769 EB1E  32 F3FE             LD   (STZ00),A    ;Zeiger auf 2
+  770 EB21  18 D9               JR   KONVT9       ;nichts ausgeben
+  771                   ;
+  772 EB23  2A 1800     KONVT1: LD   HL,(CUPOS)
+  773 EB26  FE 01               CP   01H          ;^A Cursor home                      
+  774 EB28  28 5B               JR   Z,CHOME                                             
+  775 EB2A  FE 07               CP   07H          ;^G akustisches Signal                                                 
+  776 EB2C  CA ECA9             JP   Z,MBEEP                                              
+  777 EB2F  FE 08               CP   08H          ;^H Cursor links                     
+  778 EB31  CA EBAD             JP   Z,CLEFT                                             
+  779 EB34  FE 0A               CP   0AH          ;^J Zeilenvorschub                   
+  780 EB36  CA EBB1             JP   Z,CLF                                               
+  781 EB39  FE 0C               CP   0CH          ;^L CLS                              
+  782 EB3B  28 51               JR   Z,BCLS                                              
+  783 EB3D  FE 0D               CP   0DH          ;^M Wagenruecklauf                   
+  784 EB3F  CA EBC9             JP   Z,CCRET                                             
+  785 EB42  FE 14               CP   14H          ;^T BS ab Cursor loeschen            
+  786 EB44  CA EBD0             JP   Z,CBLOE                                             
+  787 EB47  FE 15               CP   15H          ;^U Cursor nach rechts               
+  788 EB49  CA EBF3             JP   Z,CRIGH                                             
+  789 EB4C  FE 16               CP   16H          ;^V Zeile ab Cursor loeschen         
+  790 EB4E  CA EBF7             JP   Z,CZLOE                                             
+  791 EB51  FE 18               CP   18H          ;^X Zeile ab Cursor loeschen + CR    
+  792 EB53  CA EC1E             JP   Z,CZLCR                                             
+  793 EB56  FE 1A               CP   1AH          ;^Z Cursor hoch                      
+  794 EB58  CA EC47             JP   Z,CHOCH                                             
+  795 EB5B  FE 82               CP   82H          ;Kursor ein
+  796 EB5D  CA ED0B             JP   Z,CUON
+  797 EB60  FE 83               CP   83H          ;Kursor aus
+  798 EB62  CA ED13             JP   Z,CUOFF
+  799                   ;
+  800 EB65  47                  LD   B,A          ;Zeichen merken                      
+  801 EB66  3A F3F8             LD   A,(COLOR)                                         
+  802 EB69  A7                  AND  A            ;Test auf Color-BWS                  
+  803 EB6A  CA EAFC             JP   Z,KONVT9     ;Z = monochrom  
+  804 EB6D  78                  LD   A,B                                                 
+  805                   ;
+  806 EB6E  FE 84               CP   84H          ;normale Darstellung
+  807 EB70  CA ECD0             JP   Z,BNORM
+  808 EB73  FE 85               CP   85H          ;invers
+  809 EB75  CA ECDE             JP   Z,BINVN
+  810 EB78  FE 86               CP   86H          ;intensiv - HihgLight
+  811 EB7A  CA ECED             JP   Z,BINTE
+  812 EB7D  FE 87               CP   87H          ;intensiv + invers
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  15
+BIOS    ASM
+
+  813 EB7F  CA ECFA             JP   Z,BIVIN
+  814 EB82  C3 EAFC             JP   KONVT9
+  815                   ;
+  816 EB85  21 17FF     CHOME:  LD   HL,17FFH
+  817 EB88  22 1800             LD   (CUPOS),HL
+  818 EB8B  C3 EAFC             JP   KONVT9
+  819                   ;
+  820 EB8E  3E 20       BCLS:   LD   A,20H        ;0Ch  Bildschirm loeschen
+  821 EB90  CD EBBA             CALL BCL1         ;Loeschroutine
+  822 EB93  22 1800             LD   (CUPOS),HL   ;Cursorposition
+  823 EB96  3A F3F8             LD   A,(COLOR)    ;Farbbyte
+  824 EB99  E6 77               AND  77H          ;Farb-BWS vorhanden?
+  825 EB9B  CA EAFC             JP   Z,KONVT9     ;Z = nein, dann Ende
+  826 EB9E  CD ED9D             CALL BWSCOL       ;Farbspeicher ein
+  827 EBA1  3A F3F8             LD   A,(COLOR)
+  828 EBA4  CD EBBA             CALL BCL1
+  829 EBA7  CD EDA3             CALL BWSZEI       ;Farbspeicher aus
+  830 EBAA  C3 EAFC             JP   KONVT9
+  831                   ;
+  832 EBAD  23          CLEFT:  INC  HL           ;08h  Cursor links
+  833 EBAE  C3 EC4B             JP   CHOLI
+  834                   ;
+  835 EBB1  11 0040     CLF:    LD   DE,0040H     ;0Ah  Zeilenvorschub
+  836 EBB4  A7                  AND  A
+  837 EBB5  ED 52               SBC  HL,DE
+  838 EBB7  C3 EC68             JP   SCROL
+  839                   ;
+  840 EBBA  21 1000     BCL1:   LD   HL,1000H     ;Anfang BWS
+  841 EBBD  77                  LD   (HL),A
+  842 EBBE  54                  LD   D,H
+  843 EBBF  5D                  LD   E,L
+  844 EBC0  1C                  INC  E
+  845 EBC1  C5                  PUSH BC
+  846 EBC2  01 07FF             LD   BC,07FFH     ;Laenge BWS
+  847 EBC5  ED B0               LDIR
+  848 EBC7  C1                  POP  BC
+  849 EBC8  C9                  RET
+  850                   ;
+  851 EBC9  7D          CCRET:  LD   A,L          ;0Dh  Wagenruecklauf
+  852 EBCA  F6 3F               OR   3FH
+  853 EBCC  6F                  LD   L,A
+  854 EBCD  C3 EC68             JP   SCROL
+  855                   ;
+  856 EBD0  E5          CBLOE:  PUSH HL
+  857 EBD1  3E 0F               LD   A,CUZEI      ;14h  BS ab Cursor loeschen
+  858 EBD3  36 20       CBLO1:  LD   (HL),20H
+  859 EBD5  2B                  DEC  HL
+  860 EBD6  BC                  CP   H
+  861 EBD7  20 FA               JR   NZ,CBLO1
+  862 EBD9  E1                  POP  HL
+  863 EBDA  3A F3F8             LD   A,(COLOR)
+  864 EBDD  47                  LD   B,A
+  865 EBDE  E6 77               AND  77H
+  866 EBE0  CA EAFC             JP   Z,KONVT9
+  867 EBE3  CD ED9D             CALL BWSCOL       ;Farbspeicher ein
+  868 EBE6  3E 0F               LD   A,CUZEI
+  869 EBE8  70          CBLO2:  LD   (HL),B
+  870 EBE9  2B                  DEC  HL
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  16
+BIOS    ASM
+
+  871 EBEA  BC                  CP   H
+  872 EBEB  20 FB               JR   NZ,CBLO2
+  873 EBED  CD EDA3             CALL BWSZEI       ;Farbspeicher aus
+  874 EBF0  C3 EAFC             JP   KONVT9
+  875                   ;
+  876 EBF3  2B          CRIGH:  DEC  HL           ;15h  Cursor nach rechts
+  877 EBF4  C3 EC68             JP   SCROL
+  878                   ;
+  879 EBF7  E5          CZLOE:  PUSH HL           ;16h  Zeile ab Cursor loeschen
+  880 EBF8  7D                  LD   A,L
+  881 EBF9  E6 3F               AND  3FH
+  882 EBFB  47                  LD   B,A
+  883 EBFC  04                  INC  B
+  884 EBFD  36 20       CZLO1:  LD   (HL),20H
+  885 EBFF  2B                  DEC  HL
+  886 EC00  10 FB               DJNZ CZLO1
+  887 EC02  E1                  POP  HL
+  888 EC03  3A F3F8             LD   A,(COLOR)
+  889 EC06  4F                  LD   C,A
+  890 EC07  E6 77               AND  77H
+  891 EC09  CA EAFC             JP   Z,KONVT9
+  892 EC0C  CD ED9D             CALL BWSCOL       ;Farbspeicher ein
+  893 EC0F  7D                  LD   A,L
+  894 EC10  E6 3F               AND  3FH
+  895 EC12  47                  LD   B,A
+  896 EC13  04                  INC  B
+  897 EC14  71          CZLO2:  LD   (HL),C
+  898 EC15  2B                  DEC  HL
+  899 EC16  10 FC               DJNZ CZLO2
+  900 EC18  CD EDA3             CALL BWSZEI       ;Farbspeicher aus
+  901 EC1B  C3 EAFC             JP   KONVT9
+  902                   ;
+  903 EC1E  E5          CZLCR:  PUSH HL           ;18h  Zeile ab Cursor loeschen + CR
+  904 EC1F  7D                  LD   A,L
+  905 EC20  F6 3F               OR   3FH
+  906 EC22  6F                  LD   L,A
+  907 EC23  22 1800             LD   (CUPOS),HL
+  908 EC26  E5                  PUSH HL
+  909 EC27  06 40               LD   B,40H        ;Zeilenlaenge
+  910 EC29  36 20       CZLC1:  LD   (HL),20H
+  911 EC2B  2B                  DEC  HL
+  912 EC2C  10 FB               DJNZ CZLC1
+  913 EC2E  E1                  POP  HL
+  914 EC2F  3A F3F8             LD   A,(COLOR)
+  915 EC32  4F                  LD   C,A
+  916 EC33  E6 77               AND  77H
+  917 EC35  CA EAFC             JP   Z,KONVT9
+  918 EC38  CD ED9D             CALL BWSCOL       ;Farbspeicher ein
+  919 EC3B  06 40               LD   B,40H
+  920 EC3D  71          CZLC2:  LD   (HL),C
+  921 EC3E  2B                  DEC  HL
+  922 EC3F  10 FC               DJNZ CZLC2
+  923 EC41  CD EDA3             CALL BWSZEI       ;Farbspeicher aus
+  924 EC44  C3 EAFC             JP   KONVT9
+  925                   ;
+  926 EC47  11 0040     CHOCH:  LD   DE,0040H     ;1Ah     Cursor hoch
+  927 EC4A  19                  ADD  HL,DE
+  928                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  17
+BIOS    ASM
+
+  929 EC4B  3E 18       CHOLI:  LD   A,18H        ;Begrenzung Cursor hoch und links
+  930 EC4D  BC                  CP   H
+  931 EC4E  CA EAFC             JP   Z,KONVT9
+  932 EC51  22 1800             LD   (CUPOS),HL
+  933 EC54  C3 EAFC             JP   KONVT9
+  934                   ;
+  935 EC57  77          CCHAR:  LD   (HL),A
+  936 EC58  3A F3F8             LD   A,(COLOR)
+  937 EC5B  4F                  LD   C,A
+  938 EC5C  E6 77               AND  77H
+  939 EC5E  28 07               JR   Z,CCHA1
+  940 EC60  CD ED9D             CALL BWSCOL       ;Farbspeicher ein
+  941 EC63  71                  LD   (HL),C
+  942 EC64  CD EDA3             CALL BWSZEI       ;Farbspeicher aus
+  943 EC67  2B          CCHA1:  DEC  HL
+  944                   ;
+  945 EC68  22 1800     SCROL:  LD   (CUPOS),HL
+  946 EC6B  EB                  EX   DE,HL        ;Test ob Scrollen noetig
+  947 EC6C  21 0FFF             LD   HL,0FFFH
+  948 EC6F  A7                  AND  A
+  949 EC70  ED 52               SBC  HL,DE        ;DE = akt. Cursorpos.
+  950 EC72  EB                  EX   DE,HL
+  951 EC73  DA EAFC             JP   C,KONVT9     ;CY = nicht scrollen
+  952 EC76  3E 20               LD   A,20H        ;Leerzeichen
+  953 EC78  CD EC92             CALL SCR11        ;Scrollen
+  954 EC7B  3A F3F8             LD   A,(COLOR)
+  955 EC7E  E6 77               AND  77H
+  956 EC80  CA EAFC             JP   Z,KONVT9     ;Z = kein Farbspeicher
+  957 EC83  CD ED9D             CALL BWSCOL       ;Farbspeicher ein
+  958 EC86  3A F3F8             LD   A,(COLOR)    ;Farbbyte
+  959 EC89  CD EC92             CALL SCR11
+  960 EC8C  CD EDA3             CALL BWSZEI       ;Farbspeicher aus
+  961 EC8F  C3 EAFC             JP   KONVT9
+  962                   ;
+  963 EC92  21 17BF     SCR11:  LD   HL,17BFH     ;Umladeroutine Scrollen
+  964 EC95  11 17FF             LD   DE,17FFH
+  965 EC98  01 07C0             LD   BC,07C0H
+  966 EC9B  ED B8               LDDR
+  967 EC9D  EB                  EX   DE,HL
+  968 EC9E  22 1800             LD   (CUPOS),HL
+  969 ECA1  23                  INC  HL
+  970 ECA2  06 40               LD   B,40H        ;eine Zeilenlaenge
+  971 ECA4  2D          SCR12:  DEC  L
+  972 ECA5  77                  LD   (HL),A       ;Leerzeile schreiben
+  973 ECA6  10 FC               DJNZ SCR12
+  974 ECA8  C9                  RET
+  975                   ;
+  976                   ;
+  977                   ;UP 'MBEEP' (Monitor-Beep)
+  978                   ;
+  979 ECA9  C5          MBEEP:  PUSH BC 
+  980 ECAA  06 02               LD   B,02H        ;2 Wiederholungen
+  981 ECAC  C5          MBEEP1: PUSH BC 
+  982                   ;       LD   BC,0040H     ;--> fuer 2 MHz
+  983 ECAD  01 0080             LD   BC,0080H     ;--> fuer 4 MHz
+  984 ECB0  CD ECC0             CALL UPTON        ;UP 'Ton', Reg, B = Tonlaenge, C = Tonhoehe
+  985                   ;       LD   BC,0F032H    ;--> fuer 2 MHz
+  986 ECB3  01 F064             LD   BC,0F064H    ;--> fuer 4 MHz
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  18
+BIOS    ASM
+
+  987 ECB6  CD ECC0             CALL UPTON        ;UP 'Ton', Reg, B = Tonlaenge, C = Tonhoehe
+  988 ECB9  C1                  POP  BC 
+  989 ECBA  10 F0               DJNZ MBEEP1 
+  990 ECBC  C1                  POP  BC 
+  991 ECBD  C3 EB0B             JP   COEN1 
+  992                   ;
+  993                   ;
+  994                   ;UP 'Ton', Reg, B = Tonlaenge, C = Tonhoehe
+  995                   ;
+  996 ECC0  F5          UPTON:  PUSH AF 
+  997 ECC1  DB 05       UPTON1: IN   A,(P05) 
+  998 ECC3  1F                  RRA 
+  999 ECC4  3F                  CCF 
+ 1000 ECC5  17                  RLA 
+ 1001 ECC6  D3 05               OUT  (P05),A 
+ 1002 ECC8  79                  LD   A,C 
+ 1003 ECC9  3D          UPTON2: DEC  A 
+ 1004 ECCA  20 FD               JR   NZ,UPTON2 
+ 1005 ECCC  10 F3               DJNZ UPTON1 
+ 1006 ECCE  F1                  POP  AF 
+ 1007 ECCF  C9                  RET 
+ 1008                   ;
+ 1009                   ;
+ 1010 ECD0  3A F3F9     BNORM:  LD   A,(COLO1)    ;84h  normale Darstellung
+ 1011 ECD3  E6 77               AND  77H
+ 1012 ECD5  32 F3F8             LD   (COLOR),A
+ 1013 ECD8  32 F3F9             LD   (COLO1),A
+ 1014 ECDB  C3 EAFC             JP   KONVT9
+ 1015                   ;
+ 1016 ECDE  3A F3F9     BINVN:  LD   A,(COLO1)    ;85h  invers EIN
+ 1017 ECE1  E6 77               AND  77H
+ 1018 ECE3  0F                  RRCA
+ 1019 ECE4  0F                  RRCA
+ 1020 ECE5  0F                  RRCA
+ 1021 ECE6  0F                  RRCA
+ 1022 ECE7  32 F3F8             LD   (COLOR),A
+ 1023 ECEA  C3 EAFC             JP   KONVT9
+ 1024                   ;
+ 1025 ECED  3A F3F9     BINTE:  LD   A,(COLO1)    ;86h  intensiv EIN
+ 1026 ECF0  E6 77               AND  77H
+ 1027 ECF2  F6 08               OR   08H
+ 1028 ECF4  32 F3F8             LD   (COLOR),A
+ 1029 ECF7  C3 EAFC             JP   KONVT9
+ 1030                   ;
+ 1031 ECFA  3A F3F8     BIVIN:  LD   A,(COLOR)    ;87h  intensiv + invers
+ 1032 ECFD  E6 77               AND  77H
+ 1033 ECFF  F6 08               OR   08H
+ 1034 ED01  0F                  RRCA
+ 1035 ED02  0F                  RRCA
+ 1036 ED03  0F                  RRCA
+ 1037 ED04  0F                  RRCA
+ 1038 ED05  32 F3F8             LD   (COLOR),A
+ 1039 ED08  C3 EAFC             JP   KONVT9
+ 1040                   ;
+ 1041 ED0B  3E 01       CUON:   LD   A,01H        ;82h Cursor EIN
+ 1042 ED0D  32 F3FD             LD   (CUFLAG),A
+ 1043 ED10  C3 EAFC             JP   KONVT9
+ 1044                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  19
+BIOS    ASM
+
+ 1045 ED13  AF          CUOFF:  XOR  A            ;83h Cursor AUS
+ 1046 ED14  32 F3FD             LD   (CUFLAG),A
+ 1047 ED17  C3 EAFC             JP   KONVT9
+ 1048                   ;
+ 1049                   ; Behandlung ESC-Sequenzen
+ 1050                   ;
+ 1051                   ; Input: ESC + 2 Steuerzeichen
+ 1052                   ; wenn 1. Zeichen > 80h dann Cursorposition
+ 1053                   ; sonst Auswertung Farbe / Grafikzeichen
+ 1054                   ; (stz00) = Zaehler fuer Zeichenanzahl
+ 1055                   ;
+ 1056 ED1A  3A F3FE     KONV10: LD   A,(STZ00)
+ 1057 ED1D  FE 02               CP   02H          ;2 = 1. Steuerzeichen (Zeile)
+ 1058 ED1F  20 0C               JR   NZ,KONV20    ;sonst 3. Durchlauf (Spalte)
+ 1059 ED21  79                  LD   A,C
+ 1060 ED22  32 F3FF             LD   (STZ01),A    ;erstes Zeichen merken
+ 1061 ED25  3E 01               LD   A,01H        ;Zeiger fuer 3. Durchlauf
+ 1062 ED27  32 F3FE             LD   (STZ00),A
+ 1063 ED2A  C3 EAFC             JP   KONVT9       ;nichts ausgeben
+ 1064                   ;
+ 1065                   ; Verzweigung Cursorposition / weitere Funktionen
+ 1066                   ;
+ 1067 ED2D  79          KONV20: LD   A,C
+ 1068 ED2E  32 F400             LD   (STZ02),A    ;zweites Zeichen merken
+ 1069 ED31  AF                  XOR  A
+ 1070 ED32  32 F3FE             LD   (STZ00),A    ;Durchlaufzaehler ruecksetzen
+ 1071 ED35  21 F3FF             LD   HL,STZ01
+ 1072 ED38  7E                  LD   A,(HL)
+ 1073 ED39  CB 7F               BIT  7,A          ;welche Funktion? NZ = Cursor
+ 1074 ED3B  28 2F               JR   Z,KONV22     ;Z = weitere Funktionen
+ 1075                   
+ 1076                   ; Berechnung direkte Cursorposition
+ 1077                   ; OUT:    HL = BWS-Adresse
+ 1078                   ;
+ 1079 ED3D  F5                  PUSH AF
+ 1080 ED3E  79                  LD   A,C
+ 1081 ED3F  E6 3F               AND  3FH          ;max. Spaltenzahl
+ 1082 ED41  6F                  LD   L,A
+ 1083 ED42  F1                  POP  AF
+ 1084 ED43  E6 1F               AND  1FH          ;max. Zeilenzahl
+ 1085 ED45  16 00               LD   D,00H
+ 1086 ED47  62                  LD   H,D
+ 1087 ED48  5F                  LD   E,A
+ 1088 ED49  06 06               LD   B,06H
+ 1089 ED4B  CB 23       KONV21: SLA  E
+ 1090 ED4D  CB 12               RL   D
+ 1091 ED4F  10 FA               DJNZ KONV21
+ 1092 ED51  19                  ADD  HL,DE
+ 1093 ED52  EB                  EX   DE,HL
+ 1094 ED53  21 17FF             LD   HL,17FFH     ;Ende BWS-RAM
+ 1095 ED56  A7                  AND  A
+ 1096 ED57  ED 52               SBC  HL,DE
+ 1097                   ;
+ 1098                   ; Cursor direkt positionieren
+ 1099                   ; IN:    HL = Adresse Cursor
+ 1100                   ;
+ 1101 ED59  E5                  PUSH HL
+ 1102 ED5A  2A 1800             LD   HL,(CUPOS)	  ;alte Position
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  20
+BIOS    ASM
+
+ 1103 ED5D  3A F401             LD   A,(CHAR)	  ;Zeichen holen
+ 1104 ED60  77                  LD   (HL),A	      ;auf BS schreiben
+ 1105 ED61  E1                  POP  HL
+ 1106 ED62  22 1800             LD   (CUPOS),HL   ;neue Position setzen
+ 1107 ED65  7E                  LD   A,(HL)       ;neues Zeichen holen
+ 1108 ED66  32 F401             LD   (CHAR),A     ;und merken
+ 1109 ED69  C3 EAFC             JP   KONVT9
+ 1110                   ;
+ 1111                   ; Auswertung weiterer ESC-Funktionen
+ 1112                   ; IN:      A = 1. Steuerzeichen
+ 1113                   ;
+ 1114                   ; Ausgabe Grafikzeichen aus AC1-ZG ( > 80h )
+ 1115                   ;
+ 1116 ED6C  FE 5F       KONV22: CP   5FH          ;Grafikzeichen?
+ 1117 ED6E  20 08               JR   NZ,KONV24    ;NZ = nein
+ 1118 ED70  23                  INC  HL
+ 1119 ED71  7E                  LD   A,(HL)       ;2. Zeichen holen
+ 1120 ED72  2A 1800             LD   HL,(CUPOS)
+ 1121 ED75  C3 EC57             JP   CCHAR        ;Zeichen ausgeben
+ 1122                   ;
+ 1123                   ; Einstellen der Farbe (nur Color-BWS)
+ 1124                   ;
+ 1125 ED78  FE 5D       KONV24: CP   5DH          ;Farbe?
+ 1126 ED7A  C2 EAFC             JP   NZ,KONVT9    ;NZ = nein
+ 1127 ED7D  3A F3F8             LD   A,(COLOR)    ;Color-BWS?
+ 1128 ED80  A7                  AND  A
+ 1129 ED81  CA EAFC             JP   Z,KONVT9     ;Z = nein
+ 1130 ED84  23                  INC  HL
+ 1131 ED85  7E                  LD   A,(HL)       ;2. Zeichen holen
+ 1132 ED86  E6 77               AND  77H          ;intensiv maskieren
+ 1133 ED88  47                  LD   B,A
+ 1134 ED89  0F                  RRCA
+ 1135 ED8A  0F                  RRCA
+ 1136 ED8B  0F                  RRCA
+ 1137 ED8C  0F                  RRCA
+ 1138 ED8D  B8                  CP   B            ;Zeichen- und HG-Farbe gleich?
+ 1139 ED8E  CA EAFC             JP   Z,KONVT9     ;Z = Ja, dann ignorieren
+ 1140 ED91  78                  LD   A,B
+ 1141 ED92  32 F3F8             LD   (COLOR),A    ;Farbe setzen
+ 1142 ED95  E6 77               AND  77H          ;intensiv maskieren
+ 1143 ED97  32 F3F9             LD   (COLO1),A    ;Backup
+ 1144 ED9A  C3 EAFC             JP   KONVT9
+ 1145                   ;
+ 1146 ED9D  DB F0       BWSCOL: IN   A,(PF0)      ;bwsport
+ 1147 ED9F  CB D7               SET  2,A          ;Farbspeicher ein
+ 1148 EDA1  18 04               JR   BWSZ1
+ 1149                   ;
+ 1150 EDA3  DB F0       BWSZEI: IN   A,(PF0)      ;bwsport
+ 1151 EDA5  CB 97               RES  2,A          ;Farbspeicher aus
+ 1152 EDA7  E6 07       BWSZ1:  AND  07H
+ 1153 EDA9  D3 F0               OUT  (PF0),A
+ 1154 EDAB  C9                  RET
+ 1155                   ;
+ 1156 EDAC  AF          BWSINI: XOR  A            ;Farbbyte auf Monochrom setzen
+ 1157 EDAD  32 F3F8             LD   (COLOR),A    ;Arbeitszelle Farbbyte im BIOS
+ 1158 EDB0  32 F3FA             LD   (COLO2),A    ;Merkzelle fuer WBOOT im BIOS
+ 1159 EDB3  0E F0               LD   C,0F0H       ;I/O-Adresse COLOR-BWS
+ 1160 EDB5  ED 40               IN   B,(C)        ;Konfigbyte COLOR-BWS lesen
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  21
+BIOS    ASM
+
+ 1161 EDB7  04                  INC  B            ;fuer COLOR-BWS muss B<255 sein
+ 1162 EDB8  C8                  RET  Z            ;kein COLOR-BWS vorhanden --> Ende
+ 1163                           ;hier wird die Routine verlassen, wenn kein CPLD vorh. ist
+ 1164 EDB9  05                  DEC  B            ;Konfigbyte COLOR-BWS: Farb-RAM aus
+ 1165 EDBA  50                  LD   D,B
+ 1166 EDBB  CB D2               SET  2,D          ;Konfigbyte COLOR-BWS: Farb-RAM ein
+ 1167 EDBD  21 1000             LD   HL,1000H
+ 1168 EDC0  5E                  LD   E,(HL)       ;Zeichen aus 1000h
+ 1169 EDC1  ED 51               OUT  (C),D        ;Farb-RAM einschalten
+ 1170 EDC3  3A 181F             LD   A,(CBWSB)    ;Farbbyte aus dem AC1-Monitor
+ 1171 EDC6  77                  LD   (HL),A       ;Farbe auf 1000h setzen
+ 1172 EDC7  BE                  CP   (HL)         ;ist Farb-RAM gesteckt?
+ 1173 EDC8  ED 41               OUT  (C),B        ;Farb-RAM ausschalten
+ 1174 EDCA  73                  LD   (HL),E       ;Zeichen auf 1000h zurueckschreiben
+ 1175 EDCB  C0                  RET  NZ           ;Farbe hat nicht geklappt --> Ende
+ 1176                           ;hier wird die Routine verlassen, wenn kein Farb-RAM steckt
+ 1177 EDCC  ED 51               OUT  (C),D        ;Farb-RAM einschalten
+ 1178 EDCE  C5                  PUSH BC
+ 1179 EDCF  11 1001             LD   DE,1001H
+ 1180 EDD2  01 07FF             LD   BC,07FFH
+ 1181 EDD5  ED B0               LDIR              ;Farb-RAM initialisieren
+ 1182 EDD7  7E                  LD   A,(HL)       ;Farbe aus 17FFh ruecklesen
+ 1183 EDD8  C1                  POP  BC
+ 1184 EDD9  ED 41               OUT  (C),B        ;Farb-RAM ausschalten
+ 1185 EDDB  32 F3F8             LD   (COLOR),A    ;Arbeitszelle Farbbyte im BIOS
+ 1186 EDDE  32 F3FA             LD   (COLO2),A    ;Merkzelle fuer WBOOT im BIOS
+ 1187 EDE1  C9                  RET
+ 1188                   ;
+ 1189                   ;+++++++++++++++++++++++++++++   Ende CONOUT  ++++++++++++++++
+ 1190                   ;
+ 1191 EDE2  AF          LISTST: XOR  A
+ 1192 EDE3  3D                  DEC  A
+ 1193 EDE4  C9                  RET
+ 1194                   ;
+ 1195                   ;--------------------------------------------------------------------------
+ 1196                   ;
+ 1197 EDE5  21 E641     SELDSK: LD   HL,NDISK     ;max. Anzahl der LW
+ 1198 EDE8  79                  LD   A,C          ;C = akt. LW
+ 1199 EDE9  BE                  CP   (HL)
+ 1200 EDEA  21 0000             LD   HL,0000H     ;HL=0 --> kein LW
+ 1201 EDED  D0                  RET  NC           ;akt. LW >= NDISK!!!
+ 1202 EDEE  2A E642             LD   HL,(DPHX)    ;AnfangsADR DPH(y)-Tabelle
+ 1203 EDF1  06 00               LD   B,00H        ;BC = akt. LW
+ 1204 EDF3  09                  ADD  HL,BC
+ 1205 EDF4  09                  ADD  HL,BC        ;HL = DPHY + (2 * LW)
+ 1206 EDF5  5E                  LD   E,(HL)
+ 1207 EDF6  23                  INC  HL
+ 1208 EDF7  56                  LD   D,(HL)       ;DE = (DPHY + (2 * LW))
+ 1209 EDF8  EB                  EX   DE,HL        ;HL = DPH-ADR vom akt. LW
+ 1210 EDF9  7C                  LD   A,H
+ 1211 EDFA  B5                  OR   L
+ 1212 EDFB  C8                  RET  Z            ;HL=0 --> kein DPB
+ 1213 EDFC  79                  LD   A,C
+ 1214 EDFD  32 F41C             LD   (DRIVE),A    ;aktives LW --> A
+ 1215 EE00  22 F423             LD   (DPH),HL     ;zugeordneter DPH --> HL
+ 1216 EE03  C9                  RET
+ 1217                   ;
+ 1218                   ;--------------------------------------------------------------------------
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  22
+BIOS    ASM
+
+ 1219                   ;
+ 1220 EE04  01 0000     HOME:   LD   BC,0000H
+ 1221 EE07  ED 43 F41D  SETTRK: LD   (TRACK),BC
+ 1222 EE0B  C9                  RET
+ 1223                   ;
+ 1224 EE0C  ED 43 F41F  SETSEC: LD   (SECTOR),BC
+ 1225 EE10  C9                  RET
+ 1226                   ;
+ 1227 EE11  ED 43 F421  SETDMA: LD   (DMA),BC
+ 1228 EE15  C9                  RET
+ 1229                   ;
+ 1230 EE16  60          SECTRN: LD   H,B
+ 1231 EE17  69                  LD   L,C
+ 1232 EE18  7A                  LD   A,D
+ 1233 EE19  B3                  OR   E
+ 1234 EE1A  C8                  RET  Z
+ 1235 EE1B  EB                  EX   DE,HL
+ 1236 EE1C  06 00               LD   B,00H
+ 1237 EE1E  09                  ADD  HL,BC
+ 1238 EE1F  6E                  LD   L,(HL)
+ 1239 EE20  62                  LD   H,D
+ 1240 EE21  C9                  RET
+ 1241                   ;
+ 1242                   ;--------------------------------------------------------------------------
+ 1243                   ;
+ 1244 EE22  0E 02       READ:   LD   C,02H
+ 1245 EE24  3E 04               LD   A,04H
+ 1246 EE26  21                  DEFB 21H          ;LD HL,063EH mit nxt. Befehl!!!
+ 1247 EE27  3E 06       WRITE:  LD   A,06H        ;DUMMY fuer READ
+ 1248 EE29  32 F41B             LD   (RWBYTE),A   ;hier geht es fuer READ weiter!
+ 1249 EE2C  79                  LD   A,C
+ 1250 EE2D  32 F43E             LD   (DF51E),A
+ 1251 EE30  21 EE49             LD   HL,LEDEC
+ 1252 EE33  E5                  PUSH HL
+ 1253 EE34  2A F423             LD   HL,(DPH)
+ 1254 EE37  11 000A             LD   DE,000AH
+ 1255 EE3A  19                  ADD  HL,DE
+ 1256 EE3B  7E                  LD   A,(HL)
+ 1257 EE3C  23                  INC  HL
+ 1258 EE3D  66                  LD   H,(HL)
+ 1259 EE3E  6F                  LD   L,A
+ 1260 EE3F  2B                  DEC  HL
+ 1261 EE40  7E                  LD   A,(HL)
+ 1262 EE41  2B                  DEC  HL
+ 1263 EE42  6E                  LD   L,(HL)
+ 1264 EE43  67                  LD   H,A
+ 1265 EE44  E5                  PUSH HL
+ 1266 EE45  21 F41B             LD   HL,RWBYTE    ;HL -> Bytefolge fuer R/W
+ 1267 EE48  C9                  RET
+ 1268                   ;
+ 1269 EE49  B7          LEDEC:  OR   A
+ 1270 EE4A  C8                  RET  Z
+ 1271 EE4B  3E 01               LD   A,01H
+ 1272 EE4D  C9                  RET
+ 1273                   ;
+ 1274                   ;************************  RAM-Disk   ******************************
+ 1275                   ;
+ 1276 EE4E  4E          RDSKRW: LD   C,(HL)       ;RWBYTE: 04 = Lesen; 06 = Schreiben 
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  23
+BIOS    ASM
+
+ 1277 EE4F  23                  INC  HL           ;DRIVE wird uebersprungen
+ 1278 EE50  23                  INC  HL
+ 1279 EE51  7E                  LD   A,(HL)       ;TRACK NWT
+ 1280 EE52  32 F3FB             LD   (RAFTRK),A
+ 1281 EE55  23                  INC  HL
+ 1282 EE56  7E                  LD   A,(HL)       ;TRACK HWT
+ 1283 EE57  A7                  AND  A
+ 1284 EE58  20 32               JR   NZ,RDERR     ;muss 0 sein
+ 1285 EE5A  23                  INC  HL
+ 1286 EE5B  7E                  LD   A,(HL)       ;SEKTOR NWT
+ 1287 EE5C  32 F3FC             LD   (RAFSEC),A
+ 1288 EE5F  CB 7F               BIT  7,A
+ 1289 EE61  20 29               JR   NZ,RDERR     ;Bit 7 muss 0 sein
+ 1290 EE63  CB 77               BIT  6,A
+ 1291 EE65  20 25               JR   NZ,RDERR     ;Bit 6 muss 0 sein
+ 1292 EE67  23                  INC  HL
+ 1293 EE68  7E                  LD   A,(HL)       ;SEKTOR HWT
+ 1294 EE69  A7                  AND  A
+ 1295 EE6A  20 20               JR   NZ,RDERR     ;muss 0 sein
+ 1296 EE6C  23                  INC  HL
+ 1297 EE6D  23                  INC  HL           ;DMA wird uebersprungen
+ 1298 EE6E  79                  LD   A,C
+ 1299 EE6F  01 0080             LD   BC,0080H
+ 1300 EE72  FE 06               CP   06H
+ 1301 EE74  28 08               JR   Z,RDSKWR     ;C = 06 --> RDSK Schreiben
+ 1302 EE76  CD EFAC             CALL ADRRAF
+ 1303 EE79  ED B2               INIR
+ 1304 EE7B  00                  NOP
+ 1305 EE7C  AF                  XOR  A            ;in Ordnung
+ 1306 EE7D  C9                  RET
+ 1307                   ;
+ 1308 EE7E  21 0080     RDSKWR: LD   HL,0080H     ;RAM-Disk schreiben 
+ 1309 EE81  ED 5B F421          LD   DE,(DMA)
+ 1310 EE85  CD EFAC             CALL ADRRAF
+ 1311 EE88  ED B3               OTIR
+ 1312 EE8A  AF                  XOR  A            ;in Ordnung
+ 1313 EE8B  C9                  RET
+ 1314                   ;
+ 1315 EE8C  3E FF       RDERR:  LD   A,0FFH       ;Fehler
+ 1316 EE8E  C9                  RET
+ 1317                   ;
+ 1318 EE8F  20 3D 3E 49 TXTRDI: DEFM " =>INIT.."
+ 1319 EE98  00                  DEFB 0
+ 1320                   ;
+ 1321 EE99  4F 4B       TXTRDO: DEFM "OK"
+ 1322 EE9B  00                  DEFB 0
+ 1323                   ;
+ 1324 EE9C  52 46 4C 20 TXTRDE: DEFM "RFL ERROR!"
+ 1325 EEA6  0D 0A               DEFB 0DH,0AH
+ 1326 EEA8  00                  DEFB 0
+ 1327                   ;
+ 1328 EEA9  AF          RDTEST: XOR  A            ;Kapazitaet der RAM-Disk testen
+ 1329 EEAA  D3 E6               OUT  (PE0+6),A    ;H-Adresse ruecksetzen
+ 1330 EEAC  21 EEFE             LD   HL,RDMERK    ;Merkzellen RAM
+ 1331 EEAF  06 03               LD   B,3          ;3 Durchlaeufe
+ 1332 EEB1  0E E0               LD   C,PE0        ;Test erfolgt in der 1. RAM-Bank
+ 1333 EEB3  16 00               LD   D,0          ;Startwert Extended-Adresse
+ 1334 EEB5  AF          RDTST1: XOR  A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  24
+BIOS    ASM
+
+ 1335 EEB6  D3 E7               OUT  (PE0+7),A    ;L-Adresse ruecksetzen
+ 1336 EEB8  7A                  LD   A,D
+ 1337 EEB9  CB 27               SLA  A            ;Extended-Adresse *= 2
+ 1338 EEBB  D3 E5               OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
+ 1339 EEBD  ED 78               IN   A,(C)
+ 1340 EEBF  77                  LD   (HL),A       ;Daten aus der RAM-Disk sichern
+ 1341 EEC0  AF                  XOR  A
+ 1342 EEC1  D3 E7               OUT  (PE0+7),A    ;L-Adresse ruecksetzen
+ 1343 EEC3  7A                  LD   A,D
+ 1344 EEC4  ED 79               OUT  (C),A        ;Testwert in die RAM-Disk schreiben
+ 1345 EEC6  23                  INC  HL           ;Merkzelle++
+ 1346 EEC7  14                  INC  D            ;Extended-Adresse++ / Testwert++
+ 1347 EEC8  10 EB               DJNZ RDTST1
+ 1348                   ;
+ 1349                   ;Tabelle der Test-Werte (mit *...* sind die zu testenden Werte):
+ 1350                   ;
+ 1351                   ;     RAM-Disk-Size =     256K  1024K  2048K
+ 1352                   ;Extended-Adresse=0000B    02H    02H   *00H*
+ 1353                   ;Extended-Adresse=0010B    02H   *01H*   01H
+ 1354                   ;Extended-Adresse=0100B   *02H*   02H    02H
+ 1355                   ;
+ 1356 EECA  06 03               LD   B,3          ;3 Durchlaeufe
+ 1357 EECC  16 00               LD   D,0          ;Startwert Extended-Adresse
+ 1358 EECE  AF          RDTST2: XOR  A
+ 1359 EECF  D3 E7               OUT  (PE0+7),A    ;L-Adresse ruecksetzen
+ 1360 EED1  7A                  LD   A,D
+ 1361 EED2  CB 27               SLA  A            ;Extended-Adresse *= 2
+ 1362 EED4  D3 E5               OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
+ 1363 EED6  ED 78               IN   A,(C)
+ 1364 EED8  BA                  CP   D
+ 1365 EED9  28 06               JR   Z,RDTST3     ;2048K (B=3), 1024K (B=2), 256K (B=1)
+ 1366 EEDB  14                  INC  D            ;Extended-Adresse++ / Testwert++
+ 1367 EEDC  10 F0               DJNZ RDTST2
+ 1368 EEDE  C3 EFA3             JP   RDERRO       ;Fehler: hier stimmt was nicht!
+ 1369                   ;
+ 1370 EEE1  21 EF01     RDTST3: LD   HL,RDSIZE
+ 1371 EEE4  05                  DEC  B
+ 1372 EEE5  70                  LD   (HL),B       ;RD-Size: 0=256K 1=1024K 2=2048K
+ 1373                   ;
+ 1374 EEE6  21 EEFE             LD   HL,RDMERK    ;Merkzellen RAM (in die RD zurueck)
+ 1375 EEE9  04                  INC  B            ;1-3 Durchlaeufe, je nach RDSIZE
+ 1376 EEEA  0E E0               LD   C,PE0        ;1. RAM-Bank
+ 1377 EEEC  16 00               LD   D,0          ;Startwert Extended-Adresse
+ 1378 EEEE  AF          RDTST4: XOR  A
+ 1379 EEEF  D3 E7               OUT  (PE0+7),A    ;L-Adresse ruecksetzen
+ 1380 EEF1  7A                  LD   A,D
+ 1381 EEF2  CB 27               SLA  A            ;Extended-Adresse *= 2
+ 1382 EEF4  D3 E5               OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
+ 1383 EEF6  7E                  LD   A,(HL)
+ 1384 EEF7  ED 79               OUT  (C),A        ;urspruengliche Daten zurueckschreiben
+ 1385 EEF9  23                  INC  HL
+ 1386 EEFA  14                  INC  D
+ 1387 EEFB  10 F1               DJNZ RDTST4       ;WICHTIG: nicht mehr als notwendig
+ 1388 EEFD  C9                  RET               ;in die RAM-Disk zurC<ckschreiben!!
+ 1389                   ;
+ 1390 EEFE  00 00 00    RDMERK: DEFS 3,0          ;3 Merkzellen fuer den RAM
+ 1391 EF01  00          RDSIZE: DEFB 0            ;RD-Size: 0=256K 1=1024K 2=2048K
+ 1392                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  25
+BIOS    ASM
+
+ 1393 EF02  21 EE8F     RDFORM: LD   HL,TXTRDI    ;Formatierungstext...
+ 1394 EF05  CD EA3F             CALL OUTTXT
+ 1395 EF08  21 C002             LD   HL,0C002H    ;Hilfsprogramm von 0C000H bis 0C800H
+ 1396 EF0B  54                  LD   D,H
+ 1397 EF0C  5D                  LD   E,L
+ 1398 EF0D  2B                  DEC  HL
+ 1399 EF0E  36 E0               LD   (HL),PE0     ;0C001H = Grundadresse der RAM-Disk
+ 1400 EF10  2B                  DEC  HL
+ 1401 EF11  36 D3               LD   (HL),0D3H    ;0C000H = 0D3H --> OUT n
+ 1402 EF13  01 0200             LD   BC,0200H
+ 1403 EF16  ED B0               LDIR              ;0D3H,0E0H von 0C000H bis 0C1FFH
+ 1404 EF18  23                  INC  HL
+ 1405 EF19  36 E1               LD   (HL),PE0+1
+ 1406 EF1B  2B                  DEC  HL
+ 1407 EF1C  01 0200             LD   BC,0200H
+ 1408 EF1F  ED B0               LDIR              ;0D3H,0E1H von 0C200H bis 0C3FFH
+ 1409 EF21  23                  INC  HL
+ 1410 EF22  36 E2               LD   (HL),PE0+2
+ 1411 EF24  2B                  DEC  HL
+ 1412 EF25  01 0200             LD   BC,0200H
+ 1413 EF28  ED B0               LDIR              ;0D3H,0E2H von 0C400H bis 0C5FFH
+ 1414 EF2A  23                  INC  HL
+ 1415 EF2B  36 E3               LD   (HL),PE0+3
+ 1416 EF2D  2B                  DEC  HL
+ 1417 EF2E  01 0200             LD   BC,0200H
+ 1418 EF31  ED B0               LDIR              ;0D3H,0E3H von 0C600H bis 0C7FFH
+ 1419 EF33  36 C9               LD   (HL),0C9H    ;RET auf 0C800H
+ 1420                   ;
+ 1421 EF35  21 EF01             LD   HL,RDSIZE    ;RD-Size: 0=256K 1=1024K 2=2048K
+ 1422 EF38  7E                  LD   A,(HL)
+ 1423 EF39  FE 00               CP   0
+ 1424 EF3B  28 05               JR   Z,RDFOR1
+ 1425 EF3D  CB 27               SLA  A            ;A *= 2
+ 1426 EF3F  CB 27               SLA  A            ;A *= 2
+ 1427 EF41  3D                  DEC  A
+ 1428 EF42  57          RDFOR1: LD   D,A
+ 1429 EF43  14                  INC  D            ;neue RD-Size: 1=256K 4=1024K 8=2048K
+ 1430 EF44  AF                  XOR  A
+ 1431 EF45  D3 E7               OUT  (PE0+7),A    ;L-Adresse setzen
+ 1432 EF47  D3 E5               OUT  (PE0+5),A    ;Extended-Adresse
+ 1433 EF49  1E 00               LD   E,0          ;Merker fuer Extended-Adresse
+ 1434 EF4B  06 00               LD   B,0          ;256 Durchlaeufe
+ 1435 EF4D  0E E6               LD   C,PE0+6
+ 1436 EF4F  ED 41       RDFOR2: OUT  (C),B        ;H-Adresse setzen
+ 1437 EF51  3E E5               LD   A,0E5H       ;RD wird mit 0E5H formatiert
+ 1438 EF53  CD C000             CALL HPRDSK       ;Hilfsprogramm Format RAM-Disk
+ 1439 EF56  10 F7               DJNZ RDFOR2       ;fuer alle H-Adressen (256 Durchl.)
+ 1440 EF58  1C                  INC  E
+ 1441 EF59  7B                  LD   A,E
+ 1442 EF5A  D3 E5               OUT  (PE0+5),A    ;Extended-Adresse
+ 1443 EF5C  15                  DEC  D
+ 1444 EF5D  20 F0               JR   NZ,RDFOR2        
+ 1445                   ;
+ 1446 EF5F  21 D000             LD   HL,CCP
+ 1447 EF62  22 F421             LD   (DMA),HL
+ 1448 EF65  06 2C               LD   B,2CH        ;44 Bloecke CCP+BDOS
+ 1449 EF67  CD EF74             CALL WRCCP
+ 1450 EF6A  C2 E967             JP   NZ,CPMERR
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  26
+BIOS    ASM
+
+ 1451 EF6D  21 EE99             LD   HL,TXTRDO    ;"OK"
+ 1452 EF70  CD EA3F             CALL OUTTXT
+ 1453 EF73  C9                  RET
+ 1454                   ;
+ 1455 EF74  C5          WRCCP:  PUSH BC           ;CCP+BDOS in Systemtrack schreiben
+ 1456 EF75  0E 00               LD   C,00H        ;LW A:
+ 1457 EF77  CD EDE5             CALL SELDSK
+ 1458 EF7A  C1                  POP  BC
+ 1459 EF7B  21 0000             LD   HL,0000H
+ 1460 EF7E  22 F41D             LD   (TRACK),HL   ;Track 0
+ 1461 EF81  EB                  EX   DE,HL
+ 1462 EF82  21 D000             LD   HL,CCP
+ 1463 EF85  ED 53 F41F  WRCCP1: LD   (SECTOR),DE
+ 1464 EF89  22 F421             LD   (DMA),HL
+ 1465 EF8C  C5                  PUSH BC
+ 1466 EF8D  CD                  DEFB 0CDH         ;CALL WRITE -> CD ED CA
+ 1467 EF8E  EE27        WRCCP2: DEFW WRITE        ;kannn durch READ (EDC5) ersetzt werden
+ 1468 EF90  C1                  POP  BC
+ 1469 EF91  20 10               JR   NZ,RDERRO
+ 1470 EF93  2A F421             LD   HL,(DMA)
+ 1471 EF96  11 0080             LD   DE,0080H
+ 1472 EF99  19                  ADD  HL,DE
+ 1473 EF9A  ED 5B F41F          LD   DE,(SECTOR)
+ 1474 EF9E  13                  INC  DE
+ 1475 EF9F  10 E4               DJNZ WRCCP1
+ 1476 EFA1  AF                  XOR  A
+ 1477 EFA2  C9                  RET
+ 1478                   ;
+ 1479 EFA3  21 EE9C     RDERRO: LD   HL,TXTRDE
+ 1480 EFA6  CD EA3F             CALL OUTTXT
+ 1481 EFA9  AF                  XOR  A
+ 1482 EFAA  3D                  DEC  A
+ 1483 EFAB  C9                  RET
+ 1484                   ;
+ 1485                   ;Adressarithmetik RAF: L=RADR 0-7 , H=RADR 8-15 , A=RADR 16-19
+ 1486                   ;
+ 1487 EFAC  AF          ADRRAF: XOR  A            ;CY = 0
+ 1488 EFAD  6F                  LD   L,A 
+ 1489 EFAE  3A F3FC             LD   A,(RAFSEC)   ;8 bit
+ 1490 EFB1  67                  LD   H,A          ;H=Sektor (max. 64 = Bit 0-5)
+ 1491 EFB2  CB 1C               RR   H
+ 1492 EFB4  CB 1D               RR   L            ;H0 -> L7 ...... H5 -> H4
+ 1493 EFB6  3A F3FB             LD   A,(RAFTRK)   ;8 bit , A=Track (max. 128 bei 1M = Bit 0-6)
+ 1494 EFB9  CB 1F               RR   A            ;A0 -> CY
+ 1495 EFBB  30 02               JR   NC,ADRAF1
+ 1496 EFBD  CB EC               SET  5,H          ;H5 = A0 (RADR13)
+ 1497 EFBF  CB 1F       ADRAF1: RR   A            ;A1 -> CY
+ 1498 EFC1  30 02               JR   NC,ADRAF2
+ 1499 EFC3  CB F4               SET  6,H          ;H6 = A1 (RADR14)
+ 1500 EFC5  CB 1F       ADRAF2: RR   A            ;A2 -> CY
+ 1501 EFC7  30 02               JR   NC,ADRAF3
+ 1502 EFC9  CB FC               SET  7,H          ;H7 = A2 (RADR15)
+ 1503 EFCB  F5          ADRAF3: PUSH AF
+ 1504 EFCC  E6 03               AND  03H
+ 1505 EFCE  F6 E0               OR   PE0          ;Grundadresse der RAM-Disk
+ 1506 EFD0  4F                  LD   C,A
+ 1507 EFD1  7D                  LD   A,L
+ 1508 EFD2  D3 E7               OUT  (PE0+7),A    ;L-Adresse
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  27
+BIOS    ASM
+
+ 1509 EFD4  7C                  LD   A,H
+ 1510 EFD5  D3 E6               OUT  (PE0+6),A    ;H-Adresse
+ 1511 EFD7  F1                  POP  AF
+ 1512 EFD8  CB 1F               RR   A            ;Rotiere A rechts durch Carry
+ 1513 EFDA  CB 1F               RR   A
+ 1514 EFDC  E6 07               AND  07H          ;max. 2048K RAM-Disk
+ 1515 EFDE  D3 E5               OUT  (PE0+5),A    ;Extended-Adresse
+ 1516 EFE0  06 80               LD   B,80H
+ 1517 EFE2  2A F421             LD   HL,(DMA)
+ 1518 EFE5  C9                  RET
+ 1519                   ;
+ 1520                   ;**********************  Ende  RAM-Disk  *********************
+ 1521                   ;
+ 1522                   ;*************************  LOAD-Befehl  *********************
+ 1523                   ;
+ 1524 EFE6  C9          LOAD:   RET
+ 1525                   ;
+ 1526                   ;******************************   Ende LOAD  *****************
+ 1527                   ;
+ 1528 EFE7  2A F423     LEFFA:  LD   HL,(DPH)     ;zugeordneter DPH --> HL
+ 1529 EFEA  22 F435             LD   (DF515),HL
+ 1530 EFED  2E 0F       LF000:  LD   L,0FH
+ 1531 EFEF  D5          LF002:  PUSH DE
+ 1532 EFF0  11 000A             LD   DE,000AH
+ 1533 EFF3  62                  LD   H,D
+ 1534 EFF4  E5                  PUSH HL
+ 1535 EFF5  2A F435             LD   HL,(DF515)
+ 1536 EFF8  19                  ADD  HL,DE
+ 1537 EFF9  5E                  LD   E,(HL)
+ 1538 EFFA  23                  INC  HL
+ 1539 EFFB  56                  LD   D,(HL)
+ 1540 EFFC  E1                  POP  HL
+ 1541 EFFD  19                  ADD  HL,DE
+ 1542 EFFE  D1                  POP  DE
+ 1543 EFFF  7E                  LD   A,(HL)
+ 1544 F000  B7                  OR   A
+ 1545 F001  C9                  RET
+ 1546                   ;Ansprung unklar
+ 1547 F002  23          LF015:  INC  HL
+ 1548 F003  CB FE               SET  7,(HL)
+ 1549 F005  2B                  DEC  HL
+ 1550 F006  AF          LF019:  XOR  A
+ 1551 F007  32 F43C             LD   (DF51C),A
+ 1552 F00A  CD F011             CALL LF024
+ 1553 F00D  3A F43C             LD   A,(DF51C)
+ 1554 F010  C9                  RET
+ 1555                   ;
+ 1556 F011  4E          LF024:  LD   C,(HL)
+ 1557 F012  CD EFE7             CALL LEFFA
+ 1558 F015  CA F0CE             JP   Z,LF0E1
+ 1559 F018  79                  LD   A,C
+ 1560 F019  FE 06               CP   06H
+ 1561 F01B  3E 01               LD   A,01H
+ 1562 F01D  20 01               JR   NZ,LF033
+ 1563 F01F  AF                  XOR  A
+ 1564 F020  32 F43D     LF033:  LD   (DF51D),A
+ 1565 F023  CD EFED             CALL LF000
+ 1566 F026  47                  LD   B,A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  28
+BIOS    ASM
+
+ 1567 F027  2A F41F             LD   HL,(SECTOR)
+ 1568 F02A  CB 3C       LF03D:  SRL  H
+ 1569 F02C  CB 1D               RR   L
+ 1570 F02E  10 FA               DJNZ LF03D
+ 1571 F030  22 F438             LD   (DF518),HL
+ 1572 F033  21 F43A             LD   HL,DF51A
+ 1573 F036  7E                  LD   A,(HL)
+ 1574 F037  36 01               LD   (HL),01H
+ 1575 F039  B7                  OR   A
+ 1576 F03A  28 26               JR   Z,LF075
+ 1577 F03C  3A F41C             LD   A,(DRIVE)
+ 1578 F03F  21 F425             LD   HL,DF505
+ 1579 F042  BE                  CP   (HL)
+ 1580 F043  20 16               JR   NZ,LF06E
+ 1581 F045  2A F426             LD   HL,(DF506)
+ 1582 F048  ED 5B F41D          LD   DE,(TRACK)
+ 1583 F04C  ED 52               SBC  HL,DE
+ 1584 F04E  20 0B               JR   NZ,LF06E
+ 1585 F050  2A F428             LD   HL,(DF508)
+ 1586 F053  ED 5B F438          LD   DE,(DF518)
+ 1587 F057  ED 52               SBC  HL,DE
+ 1588 F059  28 1F               JR   Z,LF08D
+ 1589 F05B  3A F43B     LF06E:  LD   A,(DF51B)
+ 1590 F05E  B7                  OR   A
+ 1591 F05F  C4 F0BB             CALL NZ,LF0CE
+ 1592 F062  21 F41C     LF075:  LD   HL,DRIVE
+ 1593 F065  11 F425             LD   DE,DF505
+ 1594 F068  01 0009             LD   BC,0009H
+ 1595 F06B  ED B0               LDIR
+ 1596 F06D  2A F438             LD   HL,(DF518)
+ 1597 F070  22 F428             LD   (DF508),HL
+ 1598 F073  CD F0BE             CALL LF0D1
+ 1599 F076  AF                  XOR  A
+ 1600 F077  32 F43B             LD   (DF51B),A
+ 1601 F07A  CD EFED     LF08D:  CALL LF000
+ 1602 F07D  23                  INC  HL
+ 1603 F07E  3A F41F             LD   A,(SECTOR)
+ 1604 F081  A6                  AND  (HL)
+ 1605 F082  1F                  RRA
+ 1606 F083  67                  LD   H,A
+ 1607 F084  3E 00               LD   A,00H
+ 1608 F086  1F                  RRA
+ 1609 F087  6F                  LD   L,A
+ 1610 F088  11 F43F             LD   DE,DISKP
+ 1611 F08B  19                  ADD  HL,DE
+ 1612 F08C  ED 5B F421          LD   DE,(DMA)
+ 1613 F090  3A F43D             LD   A,(DF51D)
+ 1614 F093  B7                  OR   A
+ 1615 F094  20 05               JR   NZ,LF0AE
+ 1616 F096  3C                  INC  A
+ 1617 F097  32 F43B             LD   (DF51B),A
+ 1618 F09A  EB                  EX   DE,HL
+ 1619 F09B  01 0080     LF0AE:  LD   BC,0080H
+ 1620 F09E  ED B0               LDIR
+ 1621 F0A0  3A F43C             LD   A,(DF51C)
+ 1622 F0A3  B7                  OR   A
+ 1623 F0A4  20 10               JR   NZ,LF0C9
+ 1624 F0A6  3A F43E             LD   A,(DF51E)
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  29
+BIOS    ASM
+
+ 1625 F0A9  3D                  DEC  A
+ 1626 F0AA  C0                  RET  NZ
+ 1627 F0AB  32 F43B             LD   (DF51B),A
+ 1628 F0AE  CD F0BB             CALL LF0CE
+ 1629 F0B1  3A F43C             LD   A,(DF51C)
+ 1630 F0B4  B7                  OR   A
+ 1631 F0B5  C8                  RET  Z
+ 1632 F0B6  AF          LF0C9:  XOR  A
+ 1633 F0B7  32 F43A             LD   (DF51A),A
+ 1634 F0BA  C9                  RET
+ 1635                   ;
+ 1636 F0BB  3E 06       LF0CE:  LD   A,06H
+ 1637 F0BD  21                  DEFB 21H          ;LD HL,043EH -> 21 3E 04
+ 1638 F0BE  3E 04       LF0D1:  LD   A,04H  
+ 1639 F0C0  32 F437             LD   (DF517),A
+ 1640 F0C3  21 F43F             LD   HL,DISKP
+ 1641 F0C6  22 F42A             LD   (DF50A),HL
+ 1642 F0C9  21 F425             LD   HL,DF505
+ 1643 F0CC  18 09               JR   LF0EA
+ 1644                   ;
+ 1645 F0CE  3A F41B     LF0E1:  LD   A,(RWBYTE)
+ 1646 F0D1  32 F437             LD   (DF517),A
+ 1647 F0D4  21 F41C             LD   HL,DRIVE
+ 1648 F0D7  11 F42E     LF0EA:  LD   DE,DF50E
+ 1649 F0DA  01 0009             LD   BC,0009H
+ 1650 F0DD  ED B0               LDIR
+ 1651 F0DF  3A F42E             LD   A,(DF50E)
+ 1652 F0E2  17                  RLA
+ 1653 F0E3  DA F2F5             JP   C,GIDERW     ;GIDE
+ 1654 F0E6  3A F430             LD   A,(DF510)
+ 1655 F0E9  21 F432             LD   HL,DF512
+ 1656 F0EC  B6                  OR   (HL)
+ 1657 F0ED  C2 F1AE             JP   NZ,LF1C1
+ 1658 F0F0  CD EFED             CALL LF000
+ 1659 F0F3  32 F40E             LD   (DF4E8),A
+ 1660 F0F6  B7                  OR   A
+ 1661 F0F7  3E FF               LD   A,0FFH
+ 1662 F0F9  28 02               JR   Z,LF110
+ 1663 F0FB  3E 80               LD   A,80H
+ 1664 F0FD  32 F411     LF110:  LD   (DF4EB),A
+ 1665 F100  23                  INC  HL
+ 1666 F101  23                  INC  HL
+ 1667 F102  7E                  LD   A,(HL)
+ 1668 F103  32 F40F             LD   (DF4E9),A
+ 1669 F106  3A F431             LD   A,(DF511)
+ 1670 F109  BE                  CP   (HL)
+ 1671 F10A  38 04               JR   C,LF123
+ 1672 F10C  96                  SUB  (HL)
+ 1673 F10D  01 0104             LD   BC,0104H
+ 1674 F110  3C          LF123:  INC  A
+ 1675 F111  32 F40D             LD   (DF4E7),A
+ 1676 F114  23                  INC  HL
+ 1677 F115  7E                  LD   A,(HL)
+ 1678 F116  32 F410             LD   (DF4EA),A
+ 1679 F119  23                  INC  HL
+ 1680 F11A  3A F42F             LD   A,(DF50F)
+ 1681 F11D  BE                  CP   (HL)
+ 1682 F11E  38 04               JR   C,LF137
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  30
+BIOS    ASM
+
+ 1683 F120  96                  SUB  (HL)
+ 1684 F121  01 0104             LD   BC,0104H
+ 1685 F124  32 F40B     LF137:  LD   (DF4E5),A
+ 1686 F127  23                  INC  HL
+ 1687 F128  7E                  LD   A,(HL)
+ 1688 F129  B1                  OR   C
+ 1689 F12A  32 F40A             LD   (DF4E4),A
+ 1690 F12D  78                  LD   A,B
+ 1691 F12E  32 F40C             LD   (DF4E6),A
+ 1692 F131  23                  INC  HL
+ 1693 F132  3A F437             LD   A,(DF517)
+ 1694 F135  16 05               LD   D,05H
+ 1695 F137  FE 06               CP   06H
+ 1696 F139  28 02               JR   Z,LF150
+ 1697 F13B  16 06               LD   D,06H
+ 1698 F13D  7E          LF150:  LD   A,(HL)
+ 1699 F13E  E6 40               AND  40H
+ 1700 F140  B2                  OR   D
+ 1701 F141  32 F408             LD   (DF4E2),A
+ 1702 F144  11 F412             LD   DE,DF4EC
+ 1703 F147  01 0004             LD   BC,0004H
+ 1704 F14A  ED B0               LDIR
+ 1705 F14C  0E 02               LD   C,02H
+ 1706 F14E  06 02       LF161:  LD   B,02H
+ 1707 F150  C5          LF163:  PUSH BC
+ 1708 F151  CD F162             CALL LF175
+ 1709 F154  C1                  POP  BC
+ 1710 F155  B7                  OR   A
+ 1711 F156  C8                  RET  Z
+ 1712 F157  10 F7               DJNZ LF163
+ 1713 F159  0D                  DEC  C
+ 1714 F15A  C8                  RET  Z
+ 1715 F15B  C5                  PUSH BC
+ 1716 F15C  CD F1C2             CALL LF1D5
+ 1717 F15F  C1                  POP  BC
+ 1718 F160  18 EC               JR   LF161
+ 1719                   ;
+ 1720 F162  3E 03       LF175:  LD   A,03H
+ 1721 F164  06 02               LD   B,02H
+ 1722 F166  21 F414             LD   HL,CTAB      ;FDC Befehlsbyte
+ 1723 F169  D3 41               OUT  (DFDC),A     ;Datenport FDC
+ 1724 F16B  CD F21D             CALL LF230
+ 1725 F16E  CD F1D4             CALL LF1E7
+ 1726 F171  20 3B               JR   NZ,LF1C1
+ 1727 F173  21 0040             LD   HL,0040H
+ 1728 F176  3A F40E             LD   A,(DF4E8)
+ 1729 F179  3C                  INC  A
+ 1730 F17A  29          LF18D:  ADD  HL,HL
+ 1731 F17B  3D                  DEC  A
+ 1732 F17C  20 FC               JR   NZ,LF18D
+ 1733 F17E  2B                  DEC  HL
+ 1734 F17F  24                  INC  H
+ 1735 F180  2C                  INC  L
+ 1736 F181  E5                  PUSH HL
+ 1737 F182  2A F433             LD   HL,(DF513)
+ 1738 F185  E5                  PUSH HL
+ 1739 F186  3A F408             LD   A,(DF4E2)
+ 1740 F189  4F                  LD   C,A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  31
+BIOS    ASM
+
+ 1741 F18A  06 09               LD   B,09H
+ 1742 F18C  0F                  RRCA
+ 1743 F18D  3E 51               LD   A,51H
+ 1744 F18F  8F                  ADC  A,A
+ 1745 F190  32 F25C             LD   (MODE0),A    ;A2 --> INI
+ 1746 F193  32 F262             LD   (MODE1),A    ;A3 --> OUTI
+ 1747 F196  F3                  DI
+ 1748 F197  CD F214             CALL LF227
+ 1749 F19A  E1                  POP  HL
+ 1750 F19B  D1                  POP  DE
+ 1751 F19C  43                  LD   B,E
+ 1752 F19D  0E 41               LD   C,DFDC       ;Datenport FDC
+ 1753 F19F  CD F24F             CALL RW           ;FDC RW-Routine
+ 1754 F1A2  FB                  EI
+ 1755 F1A3  CD F1B5             CALL LF1C8
+ 1756 F1A6  21 F416             LD   HL,DF4F0
+ 1757 F1A9  7E                  LD   A,(HL)
+ 1758 F1AA  E6 C0               AND  0C0H
+ 1759 F1AC  28 02               JR   Z,LF1C3
+ 1760 F1AE  3E FF       LF1C1:  LD   A,0FFH
+ 1761 F1B0  32 F43C     LF1C3:  LD   (DF51C),A
+ 1762 F1B3  B7                  OR   A
+ 1763 F1B4  C9                  RET
+ 1764                   ;
+ 1765 F1B5  06 07       LF1C8:  LD   B,07H
+ 1766 F1B7  21 F416             LD   HL,DF4F0
+ 1767 F1BA  CD F238     LF1CD:  CALL LF24B
+ 1768 F1BD  77                  LD   (HL),A
+ 1769 F1BE  23                  INC  HL
+ 1770 F1BF  10 F9               DJNZ LF1CD
+ 1771 F1C1  C9                  RET
+ 1772                   ;
+ 1773 F1C2  01 0207     LF1D5:  LD   BC,0207H
+ 1774 F1C5  CD F214             CALL LF227
+ 1775 F1C8  CD F1F4             CALL LF207
+ 1776 F1CB  C8                  RET  Z
+ 1777 F1CC  01 0207             LD   BC,0207H
+ 1778 F1CF  CD F214             CALL LF227
+ 1779 F1D2  18 20               JR   LF207
+ 1780                   ;
+ 1781 F1D4  3A F40B     LF1E7:  LD   A,(DF4E5)
+ 1782 F1D7  32 F417             LD   (DF4F7),A
+ 1783 F1DA  B7                  OR   A
+ 1784 F1DB  28 E5               JR   Z,LF1D5
+ 1785 F1DD  01 030F             LD   BC,030FH
+ 1786 F1E0  21 F412             LD   HL,DF4EC
+ 1787 F1E3  CB 66               BIT  4,(HL)
+ 1788 F1E5  28 04               JR   Z,LF1FE
+ 1789 F1E7  87                  ADD  A,A
+ 1790 F1E8  32 F40B             LD   (DF4E5),A
+ 1791 F1EB  CD F214     LF1FE:  CALL LF227
+ 1792 F1EE  3A F417             LD   A,(DF4F7)
+ 1793 F1F1  32 F40B             LD   (DF4E5),A
+ 1794 F1F4  01 0108     LF207:  LD   BC,0108H
+ 1795 F1F7  CD F214             CALL LF227
+ 1796 F1FA  CD F238             CALL LF24B
+ 1797 F1FD  47                  LD   B,A
+ 1798 F1FE  32 F416             LD   (DF4F0),A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  32
+BIOS    ASM
+
+ 1799 F201  FE 80               CP   80H
+ 1800 F203  C4 F238             CALL NZ,LF24B
+ 1801 F206  CB 68               BIT  5,B
+ 1802 F208  28 EA               JR   Z,LF207
+ 1803 F20A  78                  LD   A,B
+ 1804 F20B  E6 F0               AND  0F0H
+ 1805 F20D  FE C0               CP   0C0H
+ 1806 F20F  28 E3               JR   Z,LF207
+ 1807 F211  EE 20               XOR  20H
+ 1808 F213  C9                  RET
+ 1809                   ;
+ 1810 F214  C5          LF227:  PUSH BC
+ 1811 F215  CD F272             CALL LF285
+ 1812 F218  C1                  POP  BC
+ 1813 F219  21 F409     LF22C:  LD   HL,DF4E3
+ 1814 F21C  71                  LD   (HL),C
+ 1815 F21D  0E 41       LF230:  LD   C,41H
+ 1816 F21F  D5                  PUSH DE
+ 1817 F220  11 1FFF     LF233:  LD   DE,1FFFH
+ 1818 F223  7B          LF236:  LD   A,E
+ 1819 F224  B2                  OR   D
+ 1820 F225  28 0D               JR   Z,LF247      ;Abbruch nach 8192 Versuchen
+ 1821 F227  DB 40               IN   A,(CFDC)     ;Lese Hauptstatusregister
+ 1822 F229  E6 C0               AND  0C0H
+ 1823 F22B  FE 80               CP   80H          ;FDC bereit zum Schreiben?
+ 1824 F22D  1B                  DEC  DE
+ 1825 F22E  20 F3               JR   NZ,LF236     ;noch nicht bereit
+ 1826 F230  ED A3               OUTI              ;1 Byte --> FDC
+ 1827 F232  20 EC               JR   NZ,LF233     ;Wdhlg., bis B=0
+ 1828 F234  06 00       LF247:  LD   B,00H
+ 1829 F236  D1                  POP  DE
+ 1830 F237  C9                  RET
+ 1831                   ;
+ 1832 F238  E5          LF24B:  PUSH HL
+ 1833 F239  21 1FFF             LD   HL,1FFFH
+ 1834 F23C  7D          LF24F:  LD   A,L
+ 1835 F23D  B4                  OR   H
+ 1836 F23E  3E C0               LD   A,0C0H
+ 1837 F240  28 0B               JR   Z,LF260      ;Abbruch nach 8192 Versuchen
+ 1838 F242  DB 40               IN   A,(CFDC)     ;Lese Hauptstatusregister
+ 1839 F244  E6 C0               AND  0C0H
+ 1840 F246  FE C0               CP   0C0H         ;FDC bereit zum Lesen?
+ 1841 F248  2B                  DEC  HL
+ 1842 F249  20 F1               JR   NZ,LF24F     ;noch nicht bereit
+ 1843 F24B  DB 41               IN   A,(DFDC)     ;1 Byte vom FDC lesen --> A
+ 1844 F24D  E1          LF260:  POP  HL
+ 1845 F24E  C9                  RET
+ 1846                   ;
+ 1847                   ;
+ 1848                   ;       FDC READ/WRITE Routine
+ 1849                   ;       ----------------------
+ 1850                   ;
+ 1851 F24F  3A F41A     RW:     LD   A,(LATPU)
+ 1852 F252  CB CF               SET  1,A
+ 1853 F254  D3 45               OUT  (LATCH),A    ;WAIT-Freigabe
+ 1854 F256  DB 40       RW01:   IN   A,(CFDC)     ;Lese Hauptstatusregister
+ 1855 F258  07                  RLCA
+ 1856 F259  30 FB               JR   NC,RW01      ;FDC noch nicht bereit
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  33
+BIOS    ASM
+
+ 1857 F25B  ED                  DEFB 0EDH         ;ED A2 = INI
+ 1858 F25C  A2          MODE0:  DEFB 0A2H         ;ED A3 = OUTI
+ 1859 F25D  00                  NOP
+ 1860 F25E  D3 43       RW02:   OUT  (WAIT),A     ;WAIT bis Interrupt FDC
+ 1861 F260  00                  NOP
+ 1862 F261  ED                  DEFB 0EDH         ;ED A2 = INI
+ 1863 F262  A2          MODE1:  DEFB 0A2H         ;ED A3 = OUTI
+ 1864 F263  C2 F25E             JP   NZ,RW02
+ 1865 F266  15                  DEC  D
+ 1866 F267  C2 F25E             JP   NZ,RW02
+ 1867 F26A  3A F41A             LD   A,(LATPU)
+ 1868 F26D  CB E7               SET  4,A          ;Terminal Count
+ 1869 F26F  D3 45               OUT  (LATCH),A    ;TC + WAIT-Sperrung
+ 1870 F271  C9                  RET
+ 1871                   ;
+ 1872 F272  21 F418     LF285:  LD   HL,DF4F8
+ 1873 F275  3A F40A             LD   A,(DF4E4)
+ 1874 F278  E6 03               AND  03H
+ 1875 F27A  BE                  CP   (HL)
+ 1876 F27B  77                  LD   (HL),A
+ 1877 F27C  23                  INC  HL
+ 1878 F27D  4E                  LD   C,(HL)
+ 1879 F27E  36 48               LD   (HL),48H
+ 1880 F280  F5                  PUSH AF
+ 1881 F281  E5                  PUSH HL
+ 1882 F282  21 F41A             LD   HL,LATPU
+ 1883 F285  3A F40A             LD   A,(DF4E4)
+ 1884 F288  E6 03               AND  03H
+ 1885 F28A  28 08               JR   Z,LF2A7
+ 1886 F28C  FE 02               CP   02H
+ 1887 F28E  28 04               JR   Z,LF2A7
+ 1888 F290  CB DE               SET  3,(HL)       ;Floppy-LW 1: Motor an
+ 1889 F292  18 02               JR   LF2A9
+ 1890                   ;
+ 1891 F294  CB C6       LF2A7:  SET  0,(HL)       ;Floppy-LW 0: Motor an
+ 1892 F296  7E          LF2A9:  LD   A,(HL)
+ 1893 F297  D3 45               OUT  (LATCH),A
+ 1894 F299  E1                  POP  HL
+ 1895 F29A  F1                  POP  AF
+ 1896 F29B  20 04               JR   NZ,LF2B4
+ 1897 F29D  79                  LD   A,C
+ 1898 F29E  A7                  AND  A
+ 1899 F29F  20 09               JR   NZ,LF2BD
+ 1900 F2A1  3E 48       LF2B4:  LD   A,48H
+ 1901 F2A3  CB 3F               SRL  A
+ 1902 F2A5  CB 3F               SRL  A
+ 1903 F2A7  BE                  CP   (HL)
+ 1904 F2A8  38 F7               JR   C,LF2B4
+ 1905 F2AA  7E          LF2BD:  LD   A,(HL)
+ 1906 F2AB  A7                  AND  A
+ 1907 F2AC  20 08               JR   NZ,LF2C9
+ 1908 F2AE  E5                  PUSH HL
+ 1909 F2AF  21 F2CA             LD   HL,DISCTX
+ 1910 F2B2  CD EA3F             CALL OUTTXT
+ 1911 F2B5  E1                  POP  HL
+ 1912 F2B6  C5          LF2C9:  PUSH BC
+ 1913 F2B7  E5                  PUSH HL
+ 1914 F2B8  01 0204             LD   BC,0204H
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  34
+BIOS    ASM
+
+ 1915 F2BB  CD F219             CALL LF22C
+ 1916 F2BE  CD F238             CALL LF24B
+ 1917 F2C1  E1                  POP  HL
+ 1918 F2C2  C1                  POP  BC
+ 1919 F2C3  CB 6F               BIT  5,A
+ 1920 F2C5  28 E3               JR   Z,LF2BD
+ 1921 F2C7  36 90               LD   (HL),90H
+ 1922 F2C9  C9                  RET
+ 1923                   ;
+ 1924 F2CA  20 44 49 53 DISCTX: DEFM ' DISC?'
+ 1925 F2D0  08 08 08 08         DEFB 8,8,8,8,8,8
+ 1926 F2D6  00                  NOP
+ 1927                   ;
+ 1928                   ;
+ 1929                   ; Interrupteinsprung von CTC Kanal 3
+ 1930                   ;
+ 1931 F2D7  F3          ISRCTC: DI                ;DI hat gefehlt, wurde ergaenzt
+ 1932 F2D8  F5                  PUSH AF
+ 1933 F2D9  3A F419             LD   A,(CTCCNT)   ;CTC-Zusatzzaehler lesen
+ 1934 F2DC  A7                  AND  A
+ 1935 F2DD  28 12               JR   Z,ISRCTE     ;bei "0", die Fkt. beenden
+ 1936                           ;Beim Start von HRCPM wird CNTCNT per Interrupt von 255 auf 0 heruntergezaehlt.
+ 1937                           ;Das sieht nach einer verzoegerten Steuerung von LATPU und LATCH aus.
+ 1938 F2DF  3D                  DEC  A
+ 1939 F2E0  32 F419             LD   (CTCCNT),A
+ 1940 F2E3  20 0C               JR   NZ,ISRCTE
+ 1941 F2E5  E5                  PUSH HL           ;Bei 2 MHz CPU-Takt wird nach 8 Sekunden diese Stelle erreicht
+ 1942 F2E6  21 F41A             LD   HL,LATPU
+ 1943 F2E9  CB 86               RES  0,(HL)       ;Floppy-LW 0: Motor aus
+ 1944 F2EB  CB 9E               RES  3,(HL)       ;Floppy-LW 1: Motor aus
+ 1945 F2ED  7E                  LD   A,(HL)
+ 1946 F2EE  D3 45               OUT  (LATCH),A    ;Latch auf dem Floppy-Controller ruecksetzen
+ 1947 F2F0  E1                  POP  HL
+ 1948 F2F1  F1          ISRCTE: POP  AF
+ 1949 F2F2  FB          INTEND: EI                ;ist zusaetzlich Einsprungpunkt fuer nicht genutzte Interrupts
+ 1950 F2F3  ED 4D               RETI
+ 1951                   ;
+ 1952                   ;-------------  R/W GIDE HW  -----------------------------------------------------------
+ 1953                   
+ 1954 F2F5  DB 8F       GIDERW: IN   A,(P8F)      ;Command / Status
+ 1955 F2F7  17                  RLA               ;Bit 0 = CY
+ 1956 F2F8  38 FB               JR   C,GIDERW     ;wait for hard disk ready (non-busy)
+ 1957 F2FA  2E 19               LD   L,19H
+ 1958 F2FC  CD EFEF             CALL LF002
+ 1959 F2FF  4F                  LD   C,A
+ 1960 F300  2A F431             LD   HL,(DF511)
+ 1961 F303  23                  INC  HL
+ 1962 F304  AF                  XOR  A
+ 1963 F305  47                  LD   B,A
+ 1964 F306  3C          LF318:  INC  A
+ 1965 F307  ED 42               SBC  HL,BC
+ 1966 F309  28 02               JR   Z,LF31F
+ 1967 F30B  30 F9               JR   NC,LF318
+ 1968 F30D  09          LF31F:  ADD  HL,BC
+ 1969 F30E  3D                  DEC  A
+ 1970 F30F  57                  LD   D,A
+ 1971 F310  5D                  LD   E,L
+ 1972 F311  2E 11               LD   L,11H
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  35
+BIOS    ASM
+
+ 1973 F313  CD EFEF             CALL LF002
+ 1974 F316  B2                  OR   D
+ 1975 F317  D3 8E               OUT  (P8E),A      ;Drive and Head
+ 1976 F319  7B                  LD   A,E
+ 1977 F31A  D3 8B               OUT  (P8B),A      ;Sector Number
+ 1978 F31C  23                  INC  HL
+ 1979 F31D  5E                  LD   E,(HL)
+ 1980 F31E  23                  INC  HL
+ 1981 F31F  56                  LD   D,(HL)
+ 1982 F320  2A F42F             LD   HL,(DF50F)
+ 1983 F323  19                  ADD  HL,DE
+ 1984 F324  7D                  LD   A,L
+ 1985 F325  D3 8C               OUT  (P8C),A      ;Cylinder Low
+ 1986 F327  7C                  LD   A,H
+ 1987 F328  D3 8D               OUT  (P8D),A      ;Cylinder High
+ 1988 F32A  3E 01               LD   A,01H
+ 1989 F32C  D3 8A               OUT  (P8A),A      ;Sector Count
+ 1990 F32E  3A F437             LD   A,(DF517)
+ 1991 F331  FE 06               CP   06H
+ 1992 F333  28 16               JR   Z,LF35D      ;6 = schreiben
+ 1993                   ;
+ 1994                   ;  GIDE lesen 1 Sektor = 512 Bytes nach Puffer
+ 1995                   ;
+ 1996 F335  3E 20               LD   A,20H        ;Read Sector
+ 1997 F337  D3 8F               OUT  (P8F),A      ;Command / Status
+ 1998 F339  DB 8F       LF34B:  IN   A,(P8F)      ;Command / Status
+ 1999 F33B  CB 5F               BIT  3,A
+ 2000 F33D  28 FA               JR   Z,LF34B      ;wait resp. DRQ active.
+ 2001 F33F  2A F433             LD   HL,(DF513)
+ 2002 F342  01 0088             LD   BC,0088H     ;B = 0 (counter), C = I/O address (Data Register)
+ 2003 F345  ED B2               INIR
+ 2004 F347  ED B2               INIR              ;512 bytes gesamt lesen
+ 2005 F349  18 19               JR   LF376
+ 2006                   ;
+ 2007                   ;  GIDE schreiben 1 Sektor = 512 Bytes von Puffer
+ 2008                   ;
+ 2009 F34B  3E 30       LF35D:  LD   A,30H        ;Write Sector
+ 2010 F34D  D3 8F               OUT  (P8F),A      ;Command / Status
+ 2011 F34F  DB 8F       LF361:  IN   A,(P8F)      ;Command / Status
+ 2012 F351  17                  RLA               ;Bit 0 = CY
+ 2013 F352  38 FB               JR   C,LF361      ;wait for hard disk ready (non-busy)
+ 2014 F354  DB 8F       LF366:  IN   A,(P8F)      ;Command / Status
+ 2015 F356  CB 5F               BIT  3,A
+ 2016 F358  28 FA               JR   Z,LF366      ;wait resp. DRQ active.
+ 2017 F35A  2A F433             LD   HL,(DF513)
+ 2018 F35D  01 0088             LD   BC,0088H     ;B = 0 (counter), C = I/O address (Data Register)
+ 2019 F360  ED B3               OTIR             
+ 2020 F362  ED B3               OTIR              ;512 bytes gesamt schreiben 
+ 2021                   ;        
+ 2022 F364  DB 8F       LF376:  IN   A,(P8F)      ;Command / Status
+ 2023 F366  17                  RLA               ;Bit 0 = CY
+ 2024 F367  38 FB               JR   C,LF376      ;wait for hard disk ready (non-busy)
+ 2025 F369  DB 8F               IN   A,(P8F)      ;Command / Status
+ 2026 F36B  E6 89               AND  89H          ;10001001b - busy, DRQ, or error?
+ 2027 F36D  C8                  RET  Z            ;no: all is fine, mit A=0
+ 2028 F36E  3E FF               LD   A,0FFH
+ 2029 F370  32 F43C             LD   (DF51C),A
+ 2030 F373  C9                  RET               ;on errors, return with A=FFh
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  36
+BIOS    ASM
+
+ 2031                   ;
+ 2032                   ;-----------------  ENDE GIDE HW  ------------------------------------------
+ 2033                   ;
+ 2034 F374  43 4F 4E 49         DEFM "CONIN-ZBIOS-STACK==26BYTES"
+ 2035 F38E  43 4F 4E 49         DEFM "CONIN-ZBIOS-STACK==26BYTES"
+ 2036 F3A8  43 4F 4E 4F CINSP:  DEFM "CONOUT-STACK_CONOUT-STACK_CONOUT-STACK"
+ 2037 F3CE  5A 42 49 4F COUTSP: DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
+ 2038 F3F7  00          CPMSTK: NOP
+ 2039                   ;
+ 2040                   ;****************  Ende CP/M StackBereich  *******************
+ 2041                   ;
+ 2042 F3F8  00          COLOR:  DEFB 0            ;Merkzelle aktuelle BWS-Farbe (0=Monochrom)
+ 2043 F3F9  00          COLO1:  DEFB 0            ;aktuelle Farbe ohne invers und intensiv
+ 2044 F3FA  00          COLO2:  DEFB 0            ;Farbe fuer Monitor und CP/M Warmstart
+ 2045                   ;
+ 2046 F3FB  00          RAFTRK: DEFB 0            ;RAFTRK EQU 0F4C2H
+ 2047 F3FC  00          RAFSEC: DEFB 0
+ 2048                   ;
+ 2049 F3FD  01          CUFLAG: DEFB 1            ;CUON/CUOFF  KursorFlag  F4CDh
+ 2050 F3FE  00          STZ00:  DEFB 0            ;Merkzelle Anz. BS-Steuerzeichen  F4CFh
+ 2051 F3FF  00          STZ01:  DEFB 0            ;Merkzelle fuer 1. ESC-Steuerzeichen
+ 2052 F400  00          STZ02:  DEFB 0            ;Merkzelle fuer 2. ESC-Steuerzeichen
+ 2053                   ;
+ 2054 F401  00          CHAR:   DEFB 0            ;Merkzelle Zeichen <> Cursor  F4D2h
+ 2055                   ;
+ 2056 F402  0000        SPCIN:  DEFW 0            ;F4D8
+ 2057 F404  0000        SPCOUT: DEFW 0
+ 2058 F406  0000        OLDNMI: DEFW 0            ;2 Bytes fuer alten NMI
+ 2059                   ;
+ 2060 F408  00          DF4E2:  NOP
+ 2061 F409  00          DF4E3:  NOP               ;Merkzelle
+ 2062 F40A  00          DF4E4:  NOP
+ 2063 F40B  00          DF4E5:  NOP
+ 2064 F40C  00          DF4E6:  NOP
+ 2065 F40D  00          DF4E7:  NOP
+ 2066 F40E  00          DF4E8:  NOP
+ 2067 F40F  00          DF4E9:  NOP
+ 2068 F410  00          DF4EA:  NOP
+ 2069 F411  00          DF4EB:  NOP
+ 2070                   ;
+ 2071 F412  00          DF4EC:  NOP               ;4 Merkzellen  
+ 2072 F413  00                  NOP
+ 2073 F414  00          CTAB:   NOP               ;FDC Befehlsbyte
+ 2074 F415  00                  NOP               ;4 Merkzellen Ende
+ 2075                   ;
+ 2076 F416  00          DF4F0:  NOP
+ 2077 F417  00          DF4F7:  NOP
+ 2078 F418  00          DF4F8:  NOP
+ 2079 F419  00          CTCCNT: NOP               ;CTC-Counter - Zusatzzaehler fuer CTC-Interrupt
+ 2080 F41A  00          LATPU:  NOP               ;Latch fuer den Floppy-Controler
+ 2081                   ;
+ 2082                   ;hier beginnt eine Bytefolge fuer Read/Write Operationen
+ 2083                   ;
+ 2084 F41B  04          RWBYTE: DEFB 4            ;4 = READ, 6 = WRITE
+ 2085 F41C  00          DRIVE:  DEFB 0            ;LW-Nr.
+ 2086 F41D  0000        TRACK:  DEFW 0            ;akt. Track
+ 2087 F41F  0000        SECTOR: DEFW 0            ;akt. Sektor
+ 2088 F421  0000        DMA:    DEFW 0            ;DMA-Adresse
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  37
+BIOS    ASM
+
+ 2089 F423  0000        DPH:    DEFW 0
+ 2090                   ;
+ 2091 F425  00          DF505:  DEFB 0            ;9 Bytes Kopie ab DRIVE:
+ 2092 F426  0000        DF506:  DEFW 0
+ 2093 F428  0000        DF508:  DEFW 0
+ 2094 F42A  0000        DF50A:  DEFW 0
+ 2095 F42C  0000                DEFW 0            ;Ende 9 Bytes
+ 2096                   ;
+ 2097 F42E  00          DF50E:  NOP               ;9 Bytes Kopie ab DRIVE: bzw. DF505:
+ 2098 F42F  00          DF50F:  NOP
+ 2099 F430  00          DF510:  NOP
+ 2100 F431  00          DF511:  DEFB 0
+ 2101 F432  00          DF512:  DEFB 0
+ 2102 F433  0000        DF513:  DEFW 0            ;Adresse akt. DISKPuffer
+ 2103 F435  0000        DF515:  DEFW 0            ;zugeordneter DPH - Ende 9 Bytes
+ 2104                   ;
+ 2105 F437  04          DF517:  DEFB 4            ;4 = READ, 6 = WRITE
+ 2106 F438  0000        DF518:  DEFW 0
+ 2107 F43A  00          DF51A:  DEFB 0
+ 2108 F43B  00          DF51B:  NOP
+ 2109 F43C  00          DF51C:  NOP
+ 2110 F43D  00          DF51D:  NOP
+ 2111 F43E  00          DF51E:  NOP
+ 2112                   ;
+ 2113 F43F  00 00 00 00 DISKP:  DEFS 1024,0       ;HW-Sektor Puffer aller LW (1k max. fuer FDD)
+ 2114 F83F  00 00 00 00 DIRBF:  DEFS 128,0        ;1 REC Puffer fuer Direktory
+ 2115 F8BF  00 00 00 00 ALL00:  DEFS 128,0        ;2048k(max.) / 2k / 8 = 128
+ 2116 F93F  00 00 00 00 ALL01:  DEFS 50,0         ;0F99FH
+ 2117 F971  00 00 00 00 ALL02:  DEFS 504,0        ;0F9D1H
+ 2118 FB69  00 00 00 00 ALL03:  DEFS 256,0        ;0FBC9H
+ 2119 FC69  00 00 00 00 ALL04:  DEFS 256,0        ;0FCC9H
+ 2120 FD69  00 00 00 00 ALL05:  DEFS 50,0         ;0FDC9H
+ 2121 FD9B  00 00 00 00 ALL06:  DEFS 50,0         ;0FDFBH
+ 2122 FDCD  00 00 00 00 CHK01:  DEFS 32,0         ;0FE2DH
+ 2123 FDED  00 00 00 00 CHK05:  DEFS 32,0         ;0FE4DH
+ 2124 FE0D  00 00 00 00 CHK06:  DEFS 32,0         ;0FE6DH
+ 2125                   ;
+ 2126 FE2D  42 49 4F 53         DEFM "BIOS-Ende"  ;nur fuer Frieder zur Info
+ 2127                   ;
+ 2128                   ;
+ 2129         FF80      DFF80   EQU  0FF80H       ;Interrupt-Einsprungpunkt CTC Kanal 0
+ 2130         FF82      DFF82   EQU  0FF82H       ;Interrupt-Einsprungpunkt CTC Kanal 1
+ 2131         FF84      DFF84   EQU  0FF84H       ;Interrupt-Einsprungpunkt CTC Kanal 2
+ 2132         FF86      DFF86   EQU  0FF86H       ;Interrupt-Einsprungpunkt CTC Kanal 3
+ 2133         FF88      DFF88   EQU  0FF88H       ;Interrupt-Einsprungpunkt Nr.1 PIO1A
+ 2134         FF8A      DFF8A   EQU  0FF8AH       ;Interrupt-Einsprungpunkt Nr.2 PIO1A
+ 2135                   ;
+ 2136                   ;#############################   PortAdressen   ##############
+ 2137                   ;
+ 2138         0000      P00     EQU  00H          ;CTC Kanal 0
+ 2139         0001      P01     EQU  01H          ;CTC Kanal 1
+ 2140         0002      P02     EQU  02H          ;CTC Kanal 2
+ 2141         0003      P03     EQU  03H          ;CTC Kanal 3
+ 2142                   ;
+ 2143         0004      P04     EQU  04H          ;PIO_A-Daten
+ 2144         0005      P05     EQU  05H          ;PIO_B-Daten
+ 2145         0006      P06     EQU  06H          ;PIO_A-Control
+ 2146                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  38
+BIOS    ASM
+
+ 2147         0014      P14     EQU  14H          ;Modul_1 - ggf. EPROMs ausblenden
+ 2148                   ;
+ 2149         001E      P1E     EQU  1EH          ;CP/M - Umschalter
+ 2150                   ;
+ 2151         008A      P8A     EQU  8AH          ;GIDE Sector Count
+ 2152         008B      P8B     EQU  8BH          ;GIDE Sector Number
+ 2153         008C      P8C     EQU  8CH          ;GIDE Cylinder Low
+ 2154         008D      P8D     EQU  8DH          ;GIDE Cylinder High
+ 2155         008E      P8E     EQU  8EH          ;GIDE Drive and Head
+ 2156         008F      P8F     EQU  8FH          ;GIDE Command/Status
+ 2157                   ;
+ 2158                           .DEPHASE
+ 2159                           END
+ 0 Error(s) Detected.
+ 6198 Absolute Bytes. 323 Symbols Detected.
+ 
