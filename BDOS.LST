@@ -1,0 +1,3099 @@
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   1
+BDOS    ASM
+
+    1                   ;		cpu	Z80
+    2                   ;*****************************************************************
+    3                   ;*****************************************************************
+    4                   ;**                                                             **
+    5                   ;**   B a s i c    D i s k   O p e r a t i n g   S y s t e m    **
+    6                   ;**            I n t e r f a c e   M o d u l e                  **
+    7                   ;**                                                             **
+    8                   ;*****************************************************************
+    9                   ;*****************************************************************
+   10                   ;
+   11                   ;	CP/A	Akademie der Wissenschaften der DDR
+   12                   ;		
+   13                   ;	rebuild from original Digital Research Code Comments
+   14                   ;	(Bdos Interface, Bdos, Version 2.2 Feb, 1980)
+   15                   ; 	for AS-Assembler and Z80 mnemonics 
+   16                   ;	V.Pohlers 14.02.2011
+   17                   ;	20.10.2014 Version vom PC1715, 11.1.89
+   18                   ;
+   19                   ;	10.12.2022 f|r Z80ASM gedndert G. Staffen
+   20                   ;	06.08.2023 ds xx,0FFh fuer bitcompatibel mit AS-Assembler
+   21                   ;
+   22                   ;
+   23         D800      		ORG	0D000H+800H
+   24                   ;
+   25         0020      SSIZE		EQU	32		;32 level stack
+   26                   ;
+   27                   ;	low memory locations
+   28         0000      REBOOT		EQU	0000H		;reboot system
+   29         0003      IOLOC		EQU	0003H		;i/o byte location
+   30         0004      DISKA		EQU	0004H		;disk address for current disk
+   31         0006      BDOSA		EQU	0006H		;address field of jmp BDOS
+   32                   ;
+   33                   ;
+   34                   ;	equates for non graphic characters
+   35         0003      CTLC		EQU	03H		;control c
+   36         0005      CTLE		EQU	05H		;physical eol
+   37         0008      CTLH		EQU	08H		;backspace
+   38         0010      CTLP		EQU	10H		;prnt toggle
+   39         0012      CTLR		EQU	12H		;repeat line
+   40         0013      CTLS		EQU	13H		;stop/start screen
+   41         0015      CTLU		EQU	15H		;line delete
+   42         0018      CTLX		EQU	18H		;=ctl-u
+   43         001A      CTLZ		EQU	1AH		;end of file
+   44         007F      RUBOUT		EQU	7FH		;char delete
+   45         0009      TAB		EQU	09H		;tab char
+   46         000D      CR		EQU	0DH		;carriage return
+   47         000A      LF		EQU	0AH		;line feed
+   48         005E      CTL		EQU	5EH		;up arrow
+   49                   ;
+   50 D800  00 00 00 00 		DB	0,0,0,0,0,0
+   51                   ;
+   52                   ;	enter here from the user's program with function number in c,
+   53                   ;	and information address in d,e
+   54 D806  C3 D863     		JP	BDOSE		;past parameter block
+   55                   ;
+   56                   ;	************************************************
+   57                   ;	*** relative locations 0009 - 000e           ***
+   58                   ;	************************************************
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   2
+BDOS    ASM
+
+   59 D809  D89B        PERERR:		DW	PERSUB		;permanent error subroutine
+   60 D80B  D8A7        SELERR:		DW	SELSUB		;select error subroutine
+   61 D80D  D8AC        RODERR:		DW	RODSUB		;ro disk error subroutine
+   62 D80F  D8B1        ROFERR:		DW	ROFSUB		;ro file error subroutine
+   63                   ;
+   64                   ;
+   65                   ;	dispatch table for functions
+   66 D811              FUNCTAB:
+   67 D811  E603  DA73  		DW	WBOOTF, FUNC1, FUNC2, FUNC3
+   68 D819  E612  E60F  		DW	PUNCHF, LISTF, FUNC6, FUNC7
+   69 D821  DA97  DA9C  		DW	FUNC8, FUNC9, FUNC10,FUNC11
+   70         000C      DISKF		EQU	($-FUNCTAB)/2	;disk funcs
+   71 D829  E43D  E442  		DW	FUNC12,FUNC13,FUNC14,FUNC15
+   72 D831  E479  E47F  		DW	FUNC16,FUNC17,FUNC18,FUNC19
+   73 D839  E4B3  E4B9  		DW	FUNC20,FUNC21,FUNC22,FUNC23
+   74 D841  E4D1  E4D7  		DW	FUNC24,FUNC25,FUNC26,FUNC27
+   75 D849  DCCD  E4F4  		DW	FUNC28,FUNC29,FUNC30,FUNC31
+   76 D851  E50A  E51D  		DW	FUNC32,FUNC33,FUNC34,FUNC35
+   77 D859  E3B1  E52F  		DW	FUNC36,FUNC37,FUNC38,FUNC39;
+   78 D861  E576        		DW	FUNC40;
+   79         0029      NFUNCS		EQU	($-FUNCTAB)/2
+   80                   ;
+   81 D863              BDOSE:		;arrive here from user programs
+   82 D863  ED 53 DAF5  		ld	(info),	de
+   83 D867  7B          		LD	A,E
+   84 D868  32 E5BD     		LD	(LINFO),A	;linfo = low(info) - don't equ
+   85 D86B  AF          		xor	a
+   86 D86C  67          		ld	h, a
+   87 D86D  6F          		ld	l, a
+   88 D86E  22 DAF7     		LD	(ARET),HL	;return value defaults to 0000
+   89                   ;save user's stack pointer, set to local stack
+   90 D871  39          		ADD	HL,SP
+   91 D872  22 DAB1     		LD	(ENTSP),HL	;entsp = stackptr
+   92 D875  31 DAF3     		LD	SP,LSTACK	;local stack setup
+   93 D878  32 E5C7     		LD	(FCBDSK),A
+   94 D87B  32 E5C5     		LD	(RESEL),A	;fcbdsk,resel=FALSE_
+   95 D87E  DD E5       		push	ix
+   96 D880  FD E5       		push	iy
+   97 D882  21 E55B     		LD	HL,GOBACK	;return here after all functions
+   98 D885  E5          		PUSH	HL		;jmp goback equivalent to ret
+   99 D886  79          		LD	A,C
+  100 D887  FE 29       		CP	NFUNCS
+  101 D889  D0          		RET	NC		;skip if invalid #
+  102 D88A  4B          		LD	C,E		;possible output character to C
+  103 D88B  21 D811     		LD	HL,FUNCTAB
+  104 D88E  5F          		LD	E,A
+  105 D88F  16 00       		LD	D,0		;DE=func, HL=.ciotab
+  106 D891  19          		ADD	HL,DE
+  107 D892  19          		ADD	HL,DE
+  108 D893  5E          		LD	E,(HL)
+  109 D894  23          		INC	HL
+  110 D895  56          		LD	D,(HL)		;DE=functab(func)
+  111 D896  2A DAF5     		LD	HL,(INFO)	;info in DE for later xchg
+  112 D899  EB          		EX	DE,HL
+  113 D89A  E9          		JP	(HL)		;dispatched
+  114                   ;
+  115                   ;
+  116                   ;	error subroutines
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   3
+BDOS    ASM
+
+  117 D89B              PERSUB:		;report permanent error
+  118 D89B  21 D8CA     		LD	HL,PERMSG
+  119 D89E  CD D8E5     		CALL	ERRFLG		;to report the error
+  120 D8A1  FE 03       		CP	CTLC
+  121 D8A3  CA 0000     		JP	Z,REBOOT	;reboot if response is ctlc
+  122 D8A6  C9          		RET			;and ignore the error
+  123                   ;
+  124 D8A7              SELSUB:		;report select error
+  125 D8A7  21 D8D5     		LD	HL,SELMSG
+  126 D8AA  18 08       		jr	WAIT_ERR	;wait console before boot
+  127                   ;
+  128 D8AC              RODSUB:		;report write to read/only disk
+  129 D8AC  21 D8E1     		LD	HL,RODMSG
+  130 D8AF  18 03       		jr	WAIT_ERR	;wait console
+  131                   ;
+  132 D8B1              ROFSUB:		;report read/only file
+  133 D8B1  21 D8DC     		LD	HL,ROFMSG	;drop through to wait for console
+  134                   ;
+  135 D8B4              WAIT_ERR:
+  136                   ;wait for response before boot
+  137 D8B4  CD D8E5     		CALL	ERRFLG
+  138 D8B7  C3 0000     		JP	REBOOT
+  139                   ;
+  140                   ;	error messages
+  141 D8BA  42 64 6F 73 DSKMSG:		DB	"Bdos Err On "
+  142 D8C6  20 3A 20 24 DSKERR:		DB	" : $"		;filled in by errflg
+  143 D8CA  42 61 64 20 permsg:		db 	"Bad Sector$"
+  144 D8D5  53 65 6C 65 SELMSG:		DB	"Select$"
+  145 D8DC  46 69 6C 65 ROFMSG:		DB	"File "
+  146 D8E1  52 2F 4F 24 RODMSG:		DB	"R/O$"
+  147                   ;
+  148                   ;
+  149 D8E5              ERRFLG:
+  150                   ;report error to console, message address in HL
+  151 D8E5  E5          		PUSH	HL
+  152 D8E6  CD D99C     		CALL	CRLF		;stack mssg address, new line
+  153 D8E9  3A DAF4     		LD	A,(CURDSK)
+  154 D8EC  C6 41       		ADD	A,'A'
+  155 D8EE  32 D8C6     		LD	(DSKERR),A	;current disk name
+  156 D8F1  01 D8BA     		LD	BC,DSKMSG
+  157 D8F4  CD D9A6     		CALL	PRINT		;the error message
+  158 D8F7  C1          		POP	BC
+  159 D8F8  CD D9A6     		CALL	PRINT		;error mssage tail
+  160 D8FB  C3 E609     		jp	CONINF		; to get the input character
+  161                   ;(drop through to conin)
+  162                   ;ret
+  163                   ;
+  164 D8FE              CONECH:
+  165                   ;read character with echo
+  166 D8FE  CD E609     		CALL	CONINF
+  167 D901  CD D90C     		CALL	ECHOC
+  168 D904  D8          		RET	C		;echo character?
+  169                   ;character must be echoed before return
+  170 D905  F5          		PUSH	AF
+  171 D906  4F          		LD	C,A
+  172 D907  CD D966     		CALL	TABOUT
+  173 D90A  F1          		POP	AF
+  174 D90B  C9          		RET			;with character in A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   4
+BDOS    ASM
+
+  175                   ;
+  176 D90C              ECHOC:
+  177                   ;echo character if graphic
+  178                   ;cr, lf, tab, or backspace
+  179 D90C  FE 0D       		CP	CR
+  180 D90E  C8          		RET	Z		;carriage return?
+  181 D90F  FE 0A       		CP	LF
+  182 D911  C8          		RET	Z		;line feed?
+  183 D912  FE 09       		CP	TAB
+  184 D914  C8          		RET	Z		;tab?
+  185 D915  FE 08       		CP	CTLH
+  186 D917  C8          		RET	Z		;backspace?
+  187 D918  FE 20       		CP	' '
+  188 D91A  C9          		RET			;carry set if not graphic
+  189                   ;
+  190 D91B              CONBRK:
+  191                   ;no active kbchar, check external break
+  192 D91B  CD E606     		CALL	CONSTF
+  193 D91E  E6 01       		AND	1
+  194 D920  C9          		RET
+  195                   
+  196 D921              CONOUT:
+  197                   ;compute character position/write console char from C
+  198                   ;compcol = TRUE_ if computing column position
+  199 D921  3A DAAD     		LD	A,(COMPCOL)
+  200 D924  B7          		OR	A
+  201 D925  20 13       		Jr	NZ,COMPOUT
+  202                   ;write the character, then compute the column
+  203                   ;write console character from C
+  204 D927  C5          		PUSH	BC
+  205 D928  CD D91B     		CALL	CONBRK		;check for screen stop function
+  206 D92B  C1          		POP	BC
+  207 D92C  C5          		PUSH	BC		;recall/save character
+  208 D92D  CD E60C     		CALL	CONOUTF		;externally, to console
+  209 D930  C1          		POP	BC
+  210 D931  C5          		PUSH	BC		;recall/save character
+  211                   ;may be copying to the list device
+  212 D932  3A DAB0     		LD	A,(LISTCP)
+  213 D935  B7          		OR	A
+  214 D936  C4 E60F     		CALL	NZ,LISTF	;to printer, if so
+  215 D939  C1          		POP	BC		;recall the character
+  216 D93A              COMPOUT:
+  217 D93A  79          		LD	A,C		;recall the character
+  218                   ;and compute column position
+  219 D93B  21 DAAF     		LD	HL,COLUMN	;A = char, HL = .column
+  220 D93E  FE 7F       		CP	RUBOUT
+  221 D940  C8          		RET	Z		;no column change if nulls
+  222 D941  34          		INC	(HL)		;column = column + 1
+  223 D942  FE 20       		CP	' '
+  224 D944  D0          		RET	NC		;return if graphic
+  225                   ;not graphic, reset column position
+  226 D945  35          		DEC	(HL)		;column = column - 1
+  227 D946  7E          		LD	A,(HL)
+  228 D947  B7          		OR	A
+  229 D948  C8          		RET	Z		;return if at zero
+  230                   ;not at zero, may be backspace or end line
+  231 D949  79          		LD	A,C		;character back to A
+  232 D94A  FE 08       		CP	CTLH
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   5
+BDOS    ASM
+
+  233 D94C  20 02       		Jr	NZ,NOTBACKSP
+  234                   ;backspace character
+  235 D94E  35          		DEC	(HL)		;column = column - 1
+  236 D94F  C9          		RET
+  237 D950              NOTBACKSP:
+  238                   ;not a backspace character, eol?
+  239 D950  FE 0A       		CP	LF
+  240 D952  C0          		RET	NZ		;return if not
+  241                   ;end of line, column = 0
+  242 D953  36 00       		LD	(HL),0		;column = 0
+  243 D955  C9          		RET
+  244                   ;
+  245 D956              CTLOUT:
+  246                   ;send C character with possible preceding up-arrow
+  247 D956  79          		LD	A,C
+  248 D957  CD D90C     		CALL	ECHOC		;cy if not graphic (or special case)
+  249 D95A  30 0A       		Jr	NC,TABOUT	;skip if graphic, tab, cr, lf, or ctlh
+  250                   ;send preceding up arrow
+  251 D95C  F5          		PUSH	AF
+  252 D95D  0E 5E       		LD	C,CTL
+  253 D95F  CD D921     		CALL	CONOUT		;up arrow
+  254 D962  F1          		POP	AF
+  255 D963  F6 40       		OR	40H		;becomes graphic letter
+  256 D965  4F          		LD	C,A		;ready to print
+  257                   ;(drop through to tabout)
+  258                   ;
+  259 D966              TABOUT:
+  260                   ;expand tabs to console
+  261 D966  79          		LD	A,C
+  262 D967  FE 09       		CP	TAB
+  263 D969  20 B6       		Jr	NZ,CONOUT	;direct to conout if not
+  264                   ;tab encountered, move to next tab position
+  265 D96B              TAB0:
+  266 D96B  0E 20       		LD	C,' '
+  267 D96D  CD D921     		CALL	CONOUT		;another blank
+  268 D970  3A DAAF     		LD	A,(COLUMN)
+  269 D973  E6 07       		AND	111B		;column mod 8 = 0 ?
+  270 D975  20 F4       		Jr	NZ,TAB0		;back for another if not
+  271 D977  C9          		RET
+  272                   ;
+  273                   ;
+  274 D978              BACKUP:
+  275                   ;back-up one screen position
+  276 D978  CD D980     		CALL	PCTLH
+  277 D97B  0E 20       		LD	C,' '
+  278 D97D  CD E60C     		CALL	CONOUTF
+  279                   ;	(drop through to pctlh)				;
+  280 D980              PCTLH:
+  281                   ;send ctlh to console without affecting column count
+  282 D980  0E 08       		LD	C,CTLH
+  283 D982  C3 E60C     		JP	CONOUTF
+  284                   ;ret
+  285                   ;
+  286 D985              CRLFP:
+  287                   ;print #, cr, lf for ctlx, ctlu, ctlr functions
+  288                   ;then move to strtcol (starting column)
+  289 D985  0E 23       		LD	C,'#'
+  290 D987  CD D921     		CALL	CONOUT
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   6
+BDOS    ASM
+
+  291 D98A  CD D99C     		CALL	CRLF
+  292                   ;column = 0, move to position strtcol
+  293 D98D              CRLFP0:
+  294 D98D  3A DAAF     		LD	A,(COLUMN)
+  295 D990  21 DAAE     		LD	HL,STRTCOL
+  296 D993  BE          		CP	(HL)
+  297 D994  D0          		RET	NC		;stop when column reaches strtcol
+  298 D995  0E 20       		LD	C,' '
+  299 D997  CD D921     		CALL	CONOUT		;print blank
+  300 D99A  18 F1       		Jr	CRLFP0
+  301                   ;;
+  302                   ;
+  303 D99C              CRLF:
+  304                   ;carriage return line feed sequence
+  305 D99C  0E 0D       		LD	C,CR
+  306 D99E  CD D921     		CALL	CONOUT
+  307 D9A1  0E 0A       		LD	C,LF
+  308 D9A3  C3 D921     		JP	CONOUT
+  309                   ;ret
+  310                   ;
+  311 D9A6              PRINT:
+  312                   ;print message until M(BC) = '$'
+  313 D9A6  0A          		LD	A,(BC)
+  314 D9A7  FE 24       		CP	'$'
+  315 D9A9  C8          		RET	Z		;stop on _
+  316                   ;more to print
+  317 D9AA  03          		INC	BC
+  318 D9AB  C5          		PUSH	BC
+  319 D9AC  4F          		LD	C,A		;char to C
+  320 D9AD  CD D966     		CALL	TABOUT		;another character printed
+  321 D9B0  C1          		POP	BC
+  322 D9B1  18 F3       		Jr	PRINT
+  323                   ;
+  324 D9B3              READ:		;read to info address (max length, current length, buffer)
+  325 D9B3  3A DAAF     		LD	A,(COLUMN)
+  326 D9B6  32 DAAE     		LD	(STRTCOL),A	;save start for ctl-x, ctl-h
+  327 D9B9  2A DAF5     		LD	HL,(INFO)
+  328 D9BC  4E          		LD	C,(HL)
+  329 D9BD  23          		INC	HL
+  330 D9BE  E5          		PUSH	HL
+  331 D9BF  06 00       		LD	B,0
+  332                   ;B = current buffer length,
+  333                   ;C = maximum buffer length,
+  334                   ;HL= next to fill - 1
+  335 D9C1              READNX:
+  336                   ;read next character, BC, HL active
+  337 D9C1  C5          		PUSH	BC
+  338 D9C2  E5          		PUSH	HL		;blen, cmax, HL saved
+  339 D9C3              READN0:
+  340 D9C3  CD E609     		CALL	CONINF		;next char in A
+  341 D9C6  E6 7F       		AND	7FH		;mask parity bit
+  342 D9C8  E1          		POP	HL
+  343 D9C9  C1          		POP	BC		;reactivate counters
+  344 D9CA  FE 0D       		CP	CR
+  345 D9CC  CA DA6C     		JP	Z,READEN	;end of line?
+  346 D9CF  FE 0A       		CP	LF
+  347 D9D1  CA DA6C     		JP	Z,READEN	;also end of line
+  348 D9D4  FE 13       		cp	13h
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   7
+BDOS    ASM
+
+  349 D9D6  28 08       		jr	z, loc_D5F9
+  350 D9D8  FE 08       		CP	CTLH
+  351 D9DA  28 04       		jr	z, loc_D5F9
+  352 D9DC  FE 7F       		cp	7Fh
+  353 D9DE  20 0D       		jr	nz, notrub
+  354                   ;do we have any characters to back over?
+  355 D9E0  78          loc_D5F9:	LD	A,B
+  356 D9E1  B7          		OR	A
+  357 D9E2  28 DD       		Jr	Z,READNX
+  358                   ;characters remain in buffer, backup one
+  359 D9E4  05          		DEC	B		;remove one character
+  360 D9E5  3A DAAF     		LD	A,(COLUMN)
+  361 D9E8  32 DAAD     		LD	(COMPCOL),A	;col > 0
+  362                   ;compcol > 0 marks repeat as length compute
+  363 D9EB  18 32       		Jr	LINELEN		;uses same code as repeat
+  364 D9ED              NOTRUB:
+  365                   ;not a rubout character, check end line
+  366 D9ED  FE 05       		CP	CTLE
+  367 D9EF  20 0B       		Jr	NZ,NOTE		;physical end line?
+  368                   ;yes, save active counters and force eol
+  369 D9F1  C5          		PUSH	BC
+  370 D9F2  E5          		PUSH	HL
+  371 D9F3  CD D99C     		CALL	CRLF
+  372 D9F6  AF          		XOR	A
+  373 D9F7  32 DAAE     		LD	(STRTCOL),A	;start position = 00
+  374 D9FA  18 C7       		Jr	READN0		;for another character
+  375 D9FC              NOTE:
+  376                   ;not end of line, list toggle?
+  377 D9FC  FE 10       		CP	CTLP
+  378 D9FE  20 0B       		Jr	NZ,NOTP		;skip if not ctlp
+  379                   ;list toggle - change parity
+  380 DA00  E5          		PUSH	HL		;save next to fill - 1
+  381 DA01  21 DAB0     		LD	HL,LISTCP	;HL=.listcp flag
+  382 DA04  3E 01       		LD	A,1
+  383 DA06  96          		SUB	(HL)		;TRUE_-listcp
+  384 DA07  77          		LD	(HL),A		;listcp = not listcp
+  385 DA08  E1          		POP	HL
+  386 DA09  18 B6       		Jr	READNX		;for another char
+  387 DA0B              NOTP:
+  388                   ;not a ctlp, line delete?
+  389 DA0B  FE 18       		CP	CTLX
+  390 DA0D  20 43       		Jr	NZ,rdecho
+  391 DA0F  E1          		POP	HL		;discard start position
+  392                   ;loop while column > strtcol
+  393 DA10              BACKX:
+  394 DA10  3A DAAE     		LD	A,(STRTCOL)
+  395 DA13  21 DAAF     		LD	HL,COLUMN
+  396 DA16  BE          		CP	(HL)
+  397 DA17  30 9A       		Jr	NC,READ		;start again
+  398 DA19  35          		DEC	(HL)		;column = column - 1
+  399 DA1A  CD D978     		CALL	BACKUP		;one position
+  400 DA1D  18 F1       		Jr	BACKX
+  401 DA1F              LINELEN:
+  402                   ;repeat line, or compute line len (ctlh)
+  403                   ;if compcol > 0
+  404 DA1F  C5          		PUSH	BC
+  405 DA20  CD D985     		CALL	CRLFP		;save line length
+  406 DA23  C1          		POP	BC
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   8
+BDOS    ASM
+
+  407 DA24  E1          		POP	HL
+  408 DA25  E5          		PUSH	HL
+  409 DA26  C5          		PUSH	BC
+  410                   ;bcur, cmax active, beginning buff at HL
+  411 DA27              REP0:
+  412 DA27  78          		LD	A,B
+  413 DA28  B7          		OR	A
+  414 DA29  28 0C       		Jr	Z,REP1		;count len to 00
+  415 DA2B  23          		INC	HL
+  416 DA2C  4E          		LD	C,(HL)		;next to print
+  417 DA2D  05          		DEC	B
+  418 DA2E  C5          		PUSH	BC
+  419 DA2F  E5          		PUSH	HL		;count length down
+  420 DA30  CD D956     		CALL	CTLOUT		;character echoed
+  421 DA33  E1          		POP	HL
+  422 DA34  C1          		POP	BC		;recall remaining count
+  423 DA35  18 F0       		Jr	REP0		;for the next character
+  424 DA37              REP1:
+  425                   ;end of repeat, recall lengths
+  426                   ;original BC still remains pushed
+  427 DA37  E5          		PUSH	HL		;save next to fill
+  428 DA38  3A DAAD     		LD	A,(COMPCOL)
+  429 DA3B  B7          		OR	A		;>0 if computing length
+  430 DA3C  CA D9C3     		JP	Z,READN0	;for another char if so
+  431                   ;column position computed for ctlh
+  432 DA3F  21 DAAF     		LD	HL,COLUMN
+  433 DA42  96          		SUB	(HL)		;diff > 0
+  434 DA43  32 DAAD     		LD	(COMPCOL),A	;count down below
+  435                   ;move back compcol-column spaces
+  436 DA46              BACKSP:
+  437                   ;move back one more space
+  438 DA46  CD D978     		CALL	BACKUP		;one space
+  439 DA49  21 DAAD     		LD	HL,COMPCOL
+  440 DA4C  35          		DEC	(HL)
+  441 DA4D  20 F7       		Jr	NZ,BACKSP
+  442 DA4F  C3 D9C3     		JP	READN0		;for next character
+  443                   ;not a ctlr, place into buffer
+  444 DA52              RDECHO:
+  445 DA52  23          		INC	HL
+  446 DA53  77          		LD	(HL),A		;character filled to mem
+  447 DA54  04          		INC	B		;blen = blen + 1
+  448 DA55              RDECH1:
+  449                   ;look for a random control character
+  450 DA55  C5          		PUSH	BC
+  451 DA56  E5          		PUSH	HL		;active values saved
+  452 DA57  4F          		LD	C,A		;ready to print
+  453 DA58  CD D956     		CALL	CTLOUT		;may be up-arrow C
+  454 DA5B  E1          		POP	HL
+  455 DA5C  C1          		POP	BC
+  456 DA5D  7E          		LD	A,(HL)		;recall char
+  457 DA5E  FE 03       		CP	CTLC		;set flags for reboot test
+  458 DA60  78          		LD	A,B		;move length to A
+  459 DA61  20 05       		Jr	NZ,NOTC		;skip if not a control c
+  460 DA63  FE 01       		CP	1		;control C, must be length 1
+  461 DA65  CA 0000     		JP	Z,REBOOT	;reboot if blen = 1
+  462                   ;length not one, so skip reboot
+  463 DA68              NOTC:
+  464                   ;not reboot, are we at end of buffer?
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page   9
+BDOS    ASM
+
+  465 DA68  B9          		CP	C
+  466 DA69  DA D9C1     		JP	C,READNX	;go for another if not
+  467 DA6C              READEN:
+  468                   ;end of read operation, store blen
+  469 DA6C  E1          		POP	HL
+  470 DA6D  70          		LD	(HL),B		;M(current len) = B
+  471 DA6E  0E 0D       		LD	C,CR
+  472 DA70  C3 D921     		JP	CONOUT		;return carriage
+  473                   ;ret
+  474 DA73              FUNC1:
+  475                   ;return console character with echo
+  476 DA73  CD D8FE     		CALL	CONECH
+  477 DA76  18 2D       		Jr	STA_RET
+  478                   ;
+  479         D966      FUNC2		EQU	TABOUT
+  480                   ;write console character with tab expansion
+  481                   ;
+  482 DA78              FUNC3:
+  483                   ;return reader character
+  484 DA78  CD E615     		CALL	READERF
+  485 DA7B  18 28       		Jr	STA_RET
+  486                   ;
+  487                   ;func4:	equated to punchf
+  488                   ;write punch character
+  489                   ;
+  490                   ;func5:	equated to listf
+  491                   ;write list character
+  492                   ;write to list device
+  493                   ;
+  494 DA7D              FUNC6:
+  495                   ;direct console i/o - read if 0ffh
+  496 DA7D  79          		LD	A,C
+  497 DA7E  3C          		INC	A
+  498 DA7F  28 07       		Jr	Z,DIRINP	;0ffh => 00h, means input mode
+  499 DA81  3C          		INC	A
+  500 DA82  CA E606     		JP	Z,CONSTF	;0feH in C for status
+  501                   ;direct output function
+  502 DA85  C3 E60C     		JP	CONOUTF;
+  503 DA88              DIRINP:
+  504 DA88  CD E606     		CALL	CONSTF		;status check
+  505 DA8B  B7          		OR	A
+  506 DA8C  C8          		ret	z		;skip, return 00 if not ready
+  507                   ;character is ready, get it
+  508 DA8D  CD E609     		CALL	CONINF	;to A
+  509 DA90  18 13       		Jr	STA_RET
+  510                   ;
+  511 DA92              FUNC7:
+  512                   ;return io byte
+  513 DA92  3A 0003     		LD	A,(IOLOC)
+  514 DA95  18 0E       		Jr	STA_RET
+  515                   ;
+  516 DA97              FUNC8:
+  517                   ;set i/o byte
+  518 DA97  21 0003     		LD	HL,IOLOC
+  519 DA9A  71          		LD	(HL),C
+  520 DA9B  C9          		RET			;jmp goback
+  521                   ;
+  522 DA9C              FUNC9:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  10
+BDOS    ASM
+
+  523                   ;write line until _ encountered
+  524 DA9C  EB          		EX	DE,HL		;was lhld info
+  525 DA9D  4D          		LD	C,L
+  526 DA9E  44          		LD	B,H		;BC=string address
+  527 DA9F  C3 D9A6     		JP	PRINT		;out to console
+  528                   ;
+  529         D9B3      FUNC10		EQU	READ
+  530                   ;read a buffered console line
+  531                   ;
+  532 DAA2              FUNC11:
+  533                   ;check console status
+  534 DAA2  CD D91B     		CALL	CONBRK
+  535                   ;(drop through to sta_ret)
+  536 DAA5              STA_RET:
+  537                   ;store the A register to aret
+  538 DAA5  32 DAF7     		LD	(ARET),A
+  539 DAA8              FUNC_RET:	;
+  540 DAA8  C9          		RET			;jmp goback (pop stack for non cp/m functions)
+  541                   ;
+  542 DAA9              SETLRET1:
+  543                   ;set lret = 1
+  544 DAA9  3E 01       		LD	A,1
+  545 DAAB  18 F8       		Jr	STA_RET;
+  546                   ;
+  547                   ;
+  548                   ;
+  549                   ;	data areas
+  550                   ;
+  551 DAAD  00          COMPCOL:	DB	0		;TRUE_ if computing column position
+  552 DAAE  00          STRTCOL:	DB	0		;starting column position after read
+  553 DAAF  00          COLUMN:		DB	0		;column position
+  554 DAB0  00          LISTCP:		DB	0		;listing toggle
+  555 DAB1  FF FF       ENTSP:		DS	2,0FFh		;entry stack pointer
+  556 DAB3  FF FF FF FF 		DS	SSIZE*2,0FFh	;stack size
+  557 DAF3              LSTACK:
+  558                   ;	end of Basic I/O System
+  559                   ;
+  560                   ;*****************************************************************
+  561                   ;*****************************************************************
+  562                   ;
+  563                   ;	common values shared between bdosi and bdos
+  564 DAF3  00          USRCODE:	DB	0		;current user number
+  565 DAF4  00          CURDSK:		DB	0		;current disk number
+  566 DAF5  FF FF       INFO:		DS	2,0FFh		;information address
+  567 DAF7  FF FF       ARET:		DS	2,0FFh		;address value to return
+  568         DAF7      LRET		EQU	ARET		;low(aret)
+  569                   ;
+  570                   ;*****************************************************************
+  571                   ;*****************************************************************
+  572                   ;**                                                             **
+  573                   ;**   B a s i c    D i s k   O p e r a t i n g   S y s t e m    **
+  574                   ;**                                                             **
+  575                   ;*****************************************************************
+  576                   ;*****************************************************************
+  577                   ;
+  578         0022      DVERS		EQU	22H		;version 2.2
+  579                   ;	module addresses
+  580                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  11
+BDOS    ASM
+
+  581                   ;	literal constants
+  582         00FF      TRUE_		EQU	0FFH		;constant TRUE_
+  583         0000      FALSE_		EQU	000H		;constant FALSE_
+  584         FFFF      ENDDIR		EQU	0FFFFH		;end of directory
+  585         0001      BYTE		EQU	1		;number of bytes for "byte" type
+  586         0002      WORD		EQU	2		;number of bytes for "word" type
+  587                   ;
+  588                   ;	fixed addresses in low memory
+  589         005C      TFCB		EQU	005CH		;default fcb location
+  590         0080      TBUFF		EQU	0080H		;default buffer location
+  591                   ;
+  592                   ;	fixed addresses referenced in bios module are
+  593                   ;	pererr (0009), selerr (000c), roderr (000f)
+  594                   ;
+  595                   ;	error message handlers
+  596                   ;
+  597                   ;per_error:
+  598                   ;report permanent error to user
+  599                   ;	lxi h,pererr  jmp goerr
+  600                   ;
+  601                   ;rod_error:						;
+  602                   ;report read/only disk error
+  603                   ;	lxi h,roderr  jmp goerr				;
+  604                   ;
+  605                   ;rof_error:						;
+  606                   ;report read/only file error			;
+  607                   ;	lxi h,roferr	;jmp goerr
+  608                   ;
+  609 DAF9              SEL_ERROR:
+  610                   ;report select error
+  611 DAF9  21 D80B     		LD	HL,SELERR;
+  612                   ;
+  613                   ;
+  614 DAFC              GOERR:
+  615                   ;HL = .errorhandler, call subroutine
+  616 DAFC  5E          		LD	E,(HL)
+  617 DAFD  23          		INC	HL
+  618 DAFE  56          		LD	D,(HL)		;address of routine in DE
+  619 DAFF  EB          		EX	DE,HL
+  620 DB00  E9          		JP	(HL)		;to subroutine
+  621                   ;
+  622                   ;
+  623                   ;
+  624                   ;	local subroutines for bios interface
+  625                   ;
+  626 DB01              MOVE:
+  627                   ;move data length of length C from source DE to
+  628                   ;destination given by HL
+  629 DB01  0C          		INC	C		;in case it is zero
+  630 DB02              MOVE0:
+  631 DB02  0D          		DEC	C
+  632 DB03  C8          		RET	Z		;more to move
+  633 DB04  1A          		LD	A,(DE)
+  634 DB05  77          		LD	(HL),A		;one byte moved
+  635 DB06  13          		INC	DE
+  636 DB07  23          		INC	HL		;to next byte
+  637 DB08  18 F8       		Jr	MOVE0
+  638                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  12
+BDOS    ASM
+
+  639 DB0A              SELECTDISK:
+  640                   ;select the disk drive given by curdsk, and fill
+  641                   ;the base addresses curtrka - alloca, then fill
+  642                   ;the values of the disk parameter block
+  643 DB0A  3A DAF4     		LD	A,(CURDSK)
+  644 DB0D  4F          		LD	C,A		;current disk# to c
+  645                   ;lsb of e = 0 if not yet logged - in
+  646 DB0E  CD E61B     		CALL	SELDSKF		;HL filled by call
+  647                   ;HL = 0000 if error, otherwise disk headers
+  648 DB11  7C          		LD	A,H
+  649 DB12  B5          		OR	L
+  650 DB13  C8          		RET	Z		;return with 0000 in HL and z flag
+  651                   ;disk header block address in hl
+  652 DB14  5E          		LD	E,(HL)
+  653 DB15  23          		INC	HL
+  654 DB16  56          		LD	D,(HL)
+  655 DB17  23          		INC	HL		;DE=.tran
+  656 DB18  22 E59A     		LD	(CDRMAXA),HL
+  657 DB1B  23          		INC	HL
+  658 DB1C  23          		INC	HL		;.cdrmax
+  659 DB1D  22 E59C     		LD	(CURTRKA),HL
+  660 DB20  23          		INC	HL
+  661 DB21  23          		INC	HL		;HL=.currec
+  662 DB22  22 E59E     		LD	(CURRECA),HL
+  663 DB25  23          		INC	HL
+  664 DB26  23          		INC	HL		;HL=.buffa
+  665                   ;DE still contains .tran
+  666 DB27  EB          		EX	DE,HL
+  667 DB28  22 E5B7     		LD	(TRANV),HL	;.tran vector
+  668 DB2B  21 E5A0     		LD	HL,BUFFA	;DE= source for move, HL=dest
+  669 DB2E  0E 08       		LD	C,ADDLIST
+  670 DB30  CD DB01     		CALL	MOVE		;addlist filled
+  671                   ;now fill the disk parameter block
+  672 DB33  2A E5A2     		LD	HL,(DPBADDR)
+  673 DB36  EB          		EX	DE,HL		;DE is source
+  674 DB37  21 E5A8     		LD	HL,SECTPT	;HL is destination
+  675 DB3A  0E 0F       		LD	C,DPBLIST
+  676 DB3C  CD DB01     		CALL	MOVE		;data filled
+  677                   ;now set single/double map mode
+  678 DB3F  2A E5AD     		LD	HL,(MAXALL)	;largest allocation number
+  679 DB42  7C          		LD	A,H		;00 indicates < 255
+  680 DB43  21 E5C4     		LD	HL,SINGLE
+  681 DB46  36 FF       		LD	(HL),TRUE_	;assume a=00
+  682 DB48  B7          		OR	A
+  683 DB49  28 02       		Jr	Z,RETSELECT
+  684                   ;high order of maxall not zero, use double dm
+  685 DB4B  36 00       		LD	(HL),FALSE_
+  686 DB4D              RETSELECT:
+  687 DB4D  3E FF       		LD	A,TRUE_
+  688 DB4F  B7          		OR	A
+  689 DB50  C9          		RET			;select disk function ok
+  690                   ;
+  691 DB51              HOME:
+  692                   ;move to home position, then offset to start of dir
+  693 DB51  CD E618     		CALL	HOMEF		;move to track 00, sector 00 reference
+  694                   ;lxi h,offset ;mov c,m ;inx h ;mov b,m ;call settrkf	;
+  695                   ;first directory position selected
+  696 DB54  AF          		XOR	A		;constant zero to accumulator
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  13
+BDOS    ASM
+
+  697 DB55  2A E59C     		LD	HL,(CURTRKA)
+  698 DB58  77          		LD	(HL),A
+  699 DB59  23          		INC	HL
+  700 DB5A  77          		LD	(HL),A		;curtrk=0000
+  701 DB5B  2A E59E     		LD	HL,(CURRECA)
+  702 DB5E  77          		LD	(HL),A
+  703 DB5F  23          		INC	HL
+  704 DB60  77          		LD	(HL),A		;currec=0000
+  705                   ;curtrk, currec both set to 0000
+  706 DB61  C9          		RET
+  707                   ;
+  708 DB62              RDBUFF:
+  709                   ;read buffer and check condition
+  710 DB62  CD E627     		CALL	READF		;current drive, track, sector, dma
+  711 DB65  18 03       		Jr	DIOCOMP		;check for i/o errors
+  712                   ;
+  713 DB67              WRBUFF:
+  714                   ;write buffer and check condition
+  715                   ;write type (wrtype) is in register C
+  716                   ;wrtype = 0 => normal write operation
+  717                   ;wrtype = 1 => directory write operation
+  718                   ;wrtype = 2 => start of new block
+  719 DB67  CD E62A     		CALL	WRITEF		;current drive, track, sector, dma
+  720 DB6A              DIOCOMP:	;check for disk errors
+  721 DB6A  B7          		OR	A
+  722 DB6B  C8          		RET	Z	;
+  723 DB6C  21 D809     		LD	HL,PERERR;
+  724 DB6F  C3 DAFC     		JP	GOERR
+  725                   ;
+  726 DB72              SEEK_DIR:
+  727                   ;seek the record containing the current dir entry
+  728 DB72  2A E5D1     		LD	HL,(DCNT)	;directory counter to HL
+  729 DB75  0E 02       		LD	C,DSKSHF
+  730 DB77  CD DC8E     		CALL	HLROTR		;value to HL
+  731 DB7A  22 E5CC     		LD	(ARECORD),HL
+  732 DB7D  22 E5D3     		LD	(DREC),HL	;ready for seek
+  733                   ;  jmp seek				;
+  734                   ;ret
+  735                   ;
+  736                   ;
+  737 DB80              SEEK:
+  738                   ;seek the track given by arecord (actual record)
+  739                   ;local equates for registers
+  740                   ;ARECH		EQU	B
+  741                   ;ARECL		EQU	C		;arecord = BC
+  742                   ;CRECH		EQU	D
+  743                   ;CRECL		EQU	E		;currec  = DE
+  744                   ;CTRKH		EQU	H
+  745                   ;CTRKL		EQU	L		;curtrk  = HL
+  746                   ;TCRECH		EQU	H
+  747                   ;TCRECL		EQU	L		;tcurrec = HL
+  748                   ;load the registers from memory
+  749 DB80  21 E5CC     		LD	HL,ARECORD                     ;LD	HL,ARECORD
+  750 DB83  4E          		LD	c,(hl)                         ;LD	ARECL,M
+  751 DB84  23          		INC	HL                             ;INC	HL
+  752 DB85  46          		LD	b,(hl)                         ;LD	ARECH,M
+  753 DB86  2A E59E     		LD	HL,(CURRECA)                   ;LD	HL,(CURRECA)
+  754 DB89  5E          		LD	e,(hl)                         ;LD	CRECL,M
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  14
+BDOS    ASM
+
+  755 DB8A  23          		INC	HL                             ;INC	HL
+  756 DB8B  56          		LD	d,(hl)                         ;LD	CRECH,M
+  757 DB8C  2A E59C     		LD	HL,(CURTRKA)                   ;LD	HL,(CURTRKA)
+  758 DB8F  7E          		LD	A,(HL)                         ;LD	A,(HL)
+  759 DB90  23          		INC	HL                             ;INC	HL
+  760 DB91  66          		LD	h,(hl)                         ;LD	CTRKH,M
+  761 DB92  6F          		LD	l,A                            ;LD	CTRKL,A
+  762                   ;loop while arecord < currec
+  763 DB93              SEEK0:
+  764 DB93  79          		LD	A,c                            ;LD	A,ARECL
+  765 DB94  93          		SUB	e                              ;SUB	CRECL
+  766 DB95  78          		LD	A,b                            ;LD	A,ARECH
+  767 DB96  9A          		SBC	A,d                            ;SBC	A,CRECH
+  768 DB97  30 0E       		Jr	NC,SEEK1	;skip if arecord >= currec
+  769                   ;currec = currec - sectpt
+  770 DB99  E5          		PUSH	hl                              ;PUSH	CTRKH
+  771 DB9A  2A E5A8     		LD	HL,(SECTPT)                     ;LD	HL,(SECTPT)
+  772 DB9D  7B          		LD	A,e                             ;LD	A,CRECL
+  773 DB9E  95          		SUB	L                               ;SUB	L
+  774 DB9F  5F          		LD	e,A                             ;LD	CRECL,A
+  775 DBA0  7A          		LD	A,d                             ;LD	A,CRECH
+  776 DBA1  9C          		SBC	A,H                             ;SBC	A,H
+  777 DBA2  57          		LD	d,A                             ;LD	CRECH,A
+  778 DBA3  E1          		POP	hl                              ;POP	CTRKH
+  779                   ;curtrk = curtrk - 1
+  780 DBA4  2B          		DEC	hl                              ;DEC	CTRKH
+  781 DBA5  18 EC       		Jr	SEEK0		;for another try
+  782 DBA7              SEEK1:
+  783                   ;look while arecord >= (t:=currec + sectpt)
+  784 DBA7  E5          		PUSH	hl                       	;PUSH	CTRKH
+  785 DBA8  2A E5A8     		LD	HL,(SECTPT)                     ;LD	HL,(SECTPT)
+  786 DBAB  19          		ADD	HL,de	;HL = currec+sectpt     ;ADD	HL,CRECH
+  787 DBAC  38 0B       		Jr	C,SEEK2	;can be > FFFFH         ;JP	C,SEEK2
+  788 DBAE  79          		LD	A,c                             ;LD	A,ARECL
+  789 DBAF  95          		SUB	l                               ;SUB	TCRECL
+  790 DBB0  78          		LD	A,b                             ;LD	A,ARECH
+  791 DBB1  9C          		SBC	A,h                             ;SBC	A,TCRECH
+  792 DBB2  38 05       		Jr	C,SEEK2	;skip if t > arecord    ;JP	C,SEEK2
+  793                   ;currec = t
+  794 DBB4  EB          		EX	DE,HL                           ;EX	DE,HL
+  795                   ;curtrk = curtrk + 1
+  796 DBB5  E1          		POP	hl                              ;POP	CTRKH
+  797 DBB6  23          		INC	hl                              ;INC	CTRKH
+  798 DBB7  18 EE       		Jr	SEEK1	;for another try        ;JP	SEEK1
+  799 DBB9  E1          SEEK2:		POP	hl                              ;POP	CTRKH
+  800                   ;arrive here with updated values in each register
+  801 DBBA  C5          		PUSH	bc                              ;PUSH	ARECH
+  802 DBBB  D5          		PUSH	de                              ;PUSH	CRECH
+  803 DBBC  E5          		PUSH	hl	;to stack for later     ;PUSH	CTRKH
+  804                   ;stack contains (lowest) BC=arecord, DE=currec, HL=curtrk
+  805 DBBD  EB          		EX	DE,HL                           ;EX	DE,HL
+  806 DBBE  2A E5B5     		LD	HL,(OFFSET)                     ;LD	HL,(OFFSET)
+  807 DBC1  19          		ADD	HL,DE	;HL = curtrk+offset     ;ADD	HL,DE
+  808 DBC2  44          		LD	B,H                             ;LD	B,H
+  809 DBC3  4D          		LD	C,L                             ;LD	C,L
+  810 DBC4  CD E61E     		CALL	SETTRKF	;track set up           ;CALL	SETTRKF
+  811                   ;note that BC - curtrk is difference to move in bios
+  812 DBC7  D1          		POP	DE	;recall curtrk          ;POP	DE
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  15
+BDOS    ASM
+
+  813 DBC8  2A E59C     		LD	HL,(CURTRKA)                    ;LD	HL,(CURTRKA)
+  814 DBCB  73          		LD	(HL),E                          ;LD	(HL),E
+  815 DBCC  23          		INC	HL                              ;INC	HL
+  816 DBCD  72          		LD	(HL),D	;curtrk updated         ;LD	(HL),D
+  817                   ;now compute sector as arecord-currec
+  818 DBCE  D1          		POP	de	;recall currec          ;POP	CRECH
+  819 DBCF  2A E59E     		LD	HL,(CURRECA)                    ;LD	HL,(CURRECA)
+  820 DBD2  73          		LD	(HL),e                          ;LD	(HL),CRECL
+  821 DBD3  23          		INC	HL                              ;INC	HL
+  822 DBD4  72          		LD	(HL),d                          ;LD	(HL),CRECH
+  823 DBD5  C1          		POP	bc	;BC=arecord, DE=currec  ;POP	ARECH
+  824 DBD6  79          		LD	A,c                             ;LD	A,ARECL
+  825 DBD7  93          		SUB	e                               ;SUB	CRECL
+  826 DBD8  4F          		LD	c,A                             ;LD	ARECL,A
+  827 DBD9  78          		LD	A,b                             ;LD	A,ARECH
+  828 DBDA  9A          		SBC	A,d                             ;SBC	A,CRECH
+  829 DBDB  47          		LD	b,A                             ;LD	ARECH,A
+  830 DBDC  2A E5B7     		LD	HL,(TRANV)                      ;LD	HL,(TRANV)
+  831 DBDF  EB          		EX	DE,HL	;BC=sector#, DE=.tran   ;EX	DE,HL
+  832 DBE0  CD E630     		CALL	SECTRAN	;HL = tran(sector)      ;CALL	SECTRAN
+  833 DBE3  4D          		LD	C,L                             ;LD	C,L
+  834 DBE4  44          		LD	B,H	;BC = tran(sector)      ;LD	B,H
+  835 DBE5  C3 E621     		JP	SETSECF	;sector selected        ;JP	SETSECF
+  836                   ;ret
+  837                   ;
+  838                   ;	file control block (fcb) constants
+  839         00E5      EMPTY		EQU	0E5H		;empty directory entry
+  840         007F      LSTREC		EQU	127		;last record# in extent
+  841         0080      RECSIZ		EQU	128		;record size
+  842         0020      FCBLEN		EQU	32		;file control block size
+  843         0004      DIRREC		EQU	RECSIZ/FCBLEN	;directory elts / record
+  844         0002      DSKSHF		EQU	2		;log2(dirrec)
+  845         0003      DSKMSK		EQU	DIRREC-1
+  846         0005      FCBSHF		EQU	5		;log2(fcblen)
+  847                   ;
+  848         000C      EXTNUM		EQU	12		;extent number field
+  849         001F      MAXEXT		EQU	31		;largest extent number
+  850         000D      UBYTES		EQU	13		;unfilled bytes field
+  851         000E      MODNUM		EQU	14		;data module number
+  852         000F      MAXMOD		EQU	15		;largest module number
+  853         0080      FWFMSK		EQU	80H		;file write flag is high order modnum
+  854         000F      NAMLEN		EQU	15		;name length
+  855         000F      RECCNT		EQU	15		;record count field
+  856         0010      DSKMAP		EQU	16		;disk map field
+  857         001F      LSTFCB		EQU	FCBLEN-1
+  858         0020      NXTREC		EQU	FCBLEN
+  859         0021      RANREC		EQU	NXTREC+1	;random record field (2 bytes)
+  860                   ;
+  861                   ;	reserved file indicators
+  862         0009      ROFILE		EQU	9		;high order of first type char
+  863         000A      INVIS		EQU	10		;invisible file in dir command
+  864                   ;	equ	11	;reserved
+  865                   ;
+  866                   ;	utility functions for file access
+  867                   ;
+  868 DBE8              DM_POSITION:
+  869                   ;compute disk map position for vrecord to HL
+  870 DBE8  21 E5AA     		LD	HL,BLKSHF
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  16
+BDOS    ASM
+
+  871 DBEB  4E          		LD	C,(HL)		;shift count to C
+  872 DBEC  3A E5CA     		LD	A,(VRECORD)	;current virtual record to A
+  873 DBEF              DMPOS0:
+  874 DBEF  B7          		OR	A
+  875 DBF0  1F          		RRA
+  876 DBF1  0D          		DEC	C
+  877 DBF2  20 FB       		Jr	NZ,DMPOS0
+  878                   ;A = shr(vrecord,blkshf) = vrecord/2**(sect/block)
+  879 DBF4  47          		LD	B,A		;save it for later addition
+  880 DBF5  3E 08       		LD	A,8
+  881 DBF7  96          		SUB	(HL)		;8-blkshf to accumulator
+  882 DBF8  4F          		LD	C,A		;extent shift count in register c
+  883 DBF9  3A E5C9     		LD	A,(EXTVAL)	;extent value ani extmsk
+  884 DBFC              DMPOS1:
+  885                   ;blkshf = 3,4,5,6,7, C=5,4,3,2,1
+  886                   ;shift is 4,3,2,1,0
+  887 DBFC  0D          		DEC	C
+  888 DBFD  28 04       		Jr	Z,DMPOS2
+  889 DBFF  B7          		OR	A
+  890 DC00  17          		RLA
+  891 DC01  18 F9       		Jr	DMPOS1
+  892 DC03              DMPOS2:
+  893                   ;arrive here with A = shl(ext and extmsk,7-blkshf)
+  894 DC03  80          		ADD	A,B		;add the previous shr(vrecord,blkshf) value
+  895                   ;A is one of the following values, depending upon alloc
+  896                   ;bks blkshf
+  897                   ;1k   3     v/8 + extval * 16
+  898                   ;2k   4     v/16+ extval * 8
+  899                   ;4k   5     v/32+ extval * 4
+  900                   ;8k   6     v/64+ extval * 2
+  901                   ;16k  7     v/128+extval * 1
+  902 DC04  C9          		RET			;with dm_position in A
+  903                   ;
+  904 DC05              GETDM:
+  905                   ;return disk map value from position given by BC
+  906 DC05  2A DAF5     		LD	HL,(INFO)	;base address of file control block
+  907 DC08  11 0010     		LD	DE,DSKMAP
+  908 DC0B  19          		ADD	HL,DE		;HL =.diskmap
+  909 DC0C  09          		ADD	HL,BC		;index by a single byte value
+  910 DC0D  3A E5C4     		LD	A,(SINGLE)	;single byte/map entry?
+  911 DC10  B7          		OR	A
+  912 DC11  28 04       		Jr	Z,GETDMD	;get disk map single byte
+  913 DC13  6E          		LD	L,(HL)
+  914 DC14  26 00       		LD	H,0
+  915 DC16  C9          		RET			;with HL=00bb
+  916 DC17              GETDMD:
+  917 DC17  09          		ADD	HL,BC		;HL=.fcb(dm+i*2)
+  918                   ;double precision value returned
+  919 DC18  5E          		LD	E,(HL)
+  920 DC19  23          		INC	HL
+  921 DC1A  56          		LD	D,(HL)
+  922 DC1B  EB          		EX	DE,HL
+  923 DC1C  C9          		RET
+  924                   ;
+  925 DC1D              INDEX:
+  926                   ;compute disk block number from current fcb
+  927 DC1D  CD DBE8     		CALL	DM_POSITION	;0...15 in register A
+  928 DC20  4F          		LD	C,A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  17
+BDOS    ASM
+
+  929 DC21  06 00       		LD	B,0
+  930 DC23  CD DC05     		CALL	GETDM		;value to HL
+  931 DC26  22 E5CC     		LD	(ARECORD),HL
+  932 DC29  C9          		RET
+  933                   ;
+  934 DC2A              ALLOCATED:
+  935                   ;called following index to see if block allocated
+  936 DC2A  2A E5CC     		LD	HL,(ARECORD)
+  937 DC2D  7D          		LD	A,L
+  938 DC2E  B4          		OR	H
+  939 DC2F  C9          		RET
+  940                   ;
+  941 DC30              ATRAN:
+  942                   ;compute actual record address, assuming index called
+  943 DC30  3A E5AA     		LD	A,(BLKSHF)	;shift count to reg A
+  944 DC33  2A E5CC     		LD	HL,(ARECORD)
+  945 DC36              ATRAN0:
+  946 DC36  29          		ADD	HL,HL
+  947 DC37  3D          		DEC	A
+  948 DC38  20 FC       		Jr	NZ,ATRAN0	;shl(arecord,blkshf)
+  949 DC3A  22 E5CE     		LD	(ARECORD1),HL	;save shifted block #
+  950 DC3D  3A E5AB     		LD	A,(BLKMSK)
+  951 DC40  4F          		LD	C,A		;mask value to C
+  952 DC41  3A E5CA     		LD	A,(VRECORD)
+  953 DC44  A1          		AND	C		;masked value in A
+  954 DC45  B5          		OR	L
+  955 DC46  6F          		LD	L,A		;to HL
+  956 DC47  22 E5CC     		LD	(ARECORD),HL	;arecord=HL or (vrecord and blkmsk)
+  957 DC4A  C9          		RET
+  958                   ;
+  959 DC4B              GETEXTA:
+  960                   ;get current extent field address to A
+  961 DC4B  2A DAF5     		LD	HL,(INFO)
+  962 DC4E  11 000C     		LD	DE,EXTNUM
+  963 DC51  19          		ADD	HL,DE		;HL=.fcb(extnum)
+  964 DC52  C9          		RET
+  965                   ;
+  966 DC53              GETFCBA:
+  967                   ;compute reccnt and nxtrec addresses for get/setfcb
+  968 DC53  2A DAF5     		LD	HL,(INFO)
+  969 DC56  11 000F     		LD	DE,RECCNT
+  970 DC59  19          		ADD	HL,DE
+  971 DC5A  EB          		EX	DE,HL		;DE=.fcb(reccnt)
+  972 DC5B  21 0011     		LD	HL,NXTREC-RECCNT
+  973 DC5E  19          		ADD	HL,DE		;HL=.fcb(nxtrec)
+  974 DC5F  C9          		RET
+  975                   ;
+  976 DC60              GETFCB:
+  977                   ;set variables from currently addressed fcb
+  978 DC60  CD DC53     		CALL	GETFCBA		;addresses in DE, HL
+  979 DC63  7E          		LD	A,(HL)
+  980 DC64  32 E5CA     		LD	(VRECORD),A	;vrecord=fcb(nxtrec)
+  981 DC67  EB          		EX	DE,HL
+  982 DC68  7E          		LD	A,(HL)
+  983 DC69  32 E5C8     		LD	(RCOUNT),A	;rcount=fcb(reccnt)
+  984 DC6C  CD DC4B     		CALL	GETEXTA		;HL=.fcb(extnum)
+  985 DC6F  3A E5AC     		LD	A,(EXTMSK)	;extent mask to a
+  986 DC72  A6          		AND	(HL)		;fcb(extnum) and extmsk
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  18
+BDOS    ASM
+
+  987 DC73  32 E5C9     		LD	(EXTVAL),A
+  988 DC76  C9          		RET
+  989                   ;
+  990 DC77              SETFCB:
+  991                   ;place values back into current fcb
+  992 DC77  CD DC53     		CALL	GETFCBA		;addresses to DE, HL
+  993 DC7A  3A E5BC     		LD	A,(SEQIO)
+  994 DC7D  FE 02       		CP	02
+  995 DC7F  20 01       		Jr	NZ,SETFCB1
+  996 DC81  AF          		XOR	A		;check ranfill
+  997 DC82              SETFCB1:
+  998 DC82  4F          		LD	C,A		;=1 if sequential i/o
+  999 DC83  3A E5CA     		LD	A,(VRECORD)
+ 1000 DC86  81          		ADD	A,C
+ 1001 DC87  77          		LD	(HL),A		;fcb(nxtrec)=vrecord+seqio
+ 1002 DC88  EB          		EX	DE,HL
+ 1003 DC89  3A E5C8     		LD	A,(RCOUNT)
+ 1004 DC8C  77          		LD	(HL),A		;fcb(reccnt)=rcount
+ 1005 DC8D  C9          		RET
+ 1006                   ;
+ 1007 DC8E              HLROTR:
+ 1008                   ;hl rotate right by amount C
+ 1009 DC8E  0C          		INC	C		;in case zero
+ 1010 DC8F  0D          HLROTR0:	DEC	C
+ 1011 DC90  C8          		RET	Z		;return when zero
+ 1012 DC91  7C          		LD	A,H
+ 1013 DC92  B7          		OR	A
+ 1014 DC93  1F          		RRA
+ 1015 DC94  67          		LD	H,A		;high byte
+ 1016 DC95  7D          		LD	A,L
+ 1017 DC96  1F          		RRA
+ 1018 DC97  6F          		LD	L,A		;low byte
+ 1019 DC98  18 F5       		Jr	HLROTR0
+ 1020                   ;
+ 1021                   ;
+ 1022 DC9A              COMPUTE_CS:
+ 1023                   ;compute checksum for current directory buffer
+ 1024 DC9A  0E 80       		LD	C,RECSIZ	;size of directory buffer
+ 1025 DC9C  2A E5A0     		LD	HL,(BUFFA)	;current directory buffer
+ 1026 DC9F  AF          		XOR	A		;clear checksum value
+ 1027 DCA0              COMPUTECS0:
+ 1028 DCA0  86          		ADD	A,(HL)
+ 1029 DCA1  23          		INC	HL
+ 1030 DCA2  0D          		DEC	C		;cs=cs+buff(recsiz-C)
+ 1031 DCA3  20 FB       		Jr	NZ,COMPUTECS0
+ 1032 DCA5  C9          		RET	;with checksum in A
+ 1033                   ;
+ 1034 DCA6              HLROTL:
+ 1035                   ;rotate the mask in HL by amount in C
+ 1036 DCA6  0C          		INC	C		;may be zero
+ 1037 DCA7  0D          HLROTL0:	DEC	C
+ 1038 DCA8  C8          		RET	Z		;return if zero
+ 1039 DCA9  29          		ADD	HL,HL
+ 1040 DCAA  18 FB       		Jr	HLROTL0
+ 1041                   ;
+ 1042 DCAC              SET_CDISK:
+ 1043                   ;set a "1" value in curdsk position of BC
+ 1044 DCAC  C5          		PUSH	BC		;save input parameter
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  19
+BDOS    ASM
+
+ 1045 DCAD  3A DAF4     		LD	A,(CURDSK)
+ 1046 DCB0  4F          		LD	C,A		;ready parameter for shift
+ 1047 DCB1  21 0001     		LD	HL,1		;number to shift
+ 1048 DCB4  CD DCA6     		CALL	HLROTL		;HL = mask to integrate
+ 1049 DCB7  C1          		POP	BC		;original mask
+ 1050 DCB8  79          		LD	A,C
+ 1051 DCB9  B5          		OR	L
+ 1052 DCBA  6F          		LD	L,A
+ 1053 DCBB  78          		LD	A,B
+ 1054 DCBC  B4          		OR	H
+ 1055 DCBD  67          		LD	H,A		;HL = mask or rol(1,curdsk)
+ 1056 DCBE  C9          		RET
+ 1057                   ;
+ 1058 DCBF              NOWRITE:
+ 1059                   ;return TRUE_ if dir checksum difference occurred
+ 1060 DCBF  2A E594     		LD	HL,(RODSK)
+ 1061 DCC2  3A DAF4     loc_D8DB:	LD	A,(CURDSK)
+ 1062 DCC5  4F          		LD	C,A
+ 1063 DCC6  CD DC8E     		CALL	HLROTR
+ 1064 DCC9  7D          		LD	A,L
+ 1065 DCCA  E6 01       		AND	1B
+ 1066 DCCC  C9          		RET			;non zero if nowrite
+ 1067                   ;
+ 1068 DCCD              SET_RO:
+ 1069                   ;set current disk to read only
+ 1070 DCCD  21 E594     		LD	HL,RODSK
+ 1071 DCD0  4E          		LD	C,(HL)
+ 1072 DCD1  23          		INC	HL
+ 1073 DCD2  46          		LD	B,(HL)
+ 1074 DCD3  CD DCAC     		CALL	SET_CDISK	;sets bit to 1
+ 1075 DCD6  22 E594     		LD	(RODSK),HL
+ 1076                   ;high water mark in directory goes to max
+ 1077 DCD9  2A E5AF     		LD	HL,(DIRMAX)
+ 1078 DCDC  23          		INC	HL
+ 1079 DCDD  EB          		EX	DE,HL		;DE = directory max
+ 1080 DCDE  2A E59A     		LD	HL,(CDRMAXA)	;HL = .cdrmax
+ 1081 DCE1  73          		LD	(HL),E
+ 1082 DCE2  23          		INC	HL
+ 1083 DCE3  72          		LD	(HL),D		;cdrmax = dirmax
+ 1084 DCE4  C9          		RET
+ 1085                   ;
+ 1086 DCE5              CHECK_RODIR:
+ 1087                   ;check current directory element for read/only status
+ 1088 DCE5  CD DCFF     		CALL	GETDPTRA	;address of element
+ 1089                   ;
+ 1090 DCE8              CHECK_ROFILE:
+ 1091                   ;check current buff(dptr) or fcb(0) for r/o status
+ 1092 DCE8  11 0009     		LD	DE,ROFILE
+ 1093 DCEB  19          		ADD	HL,DE		;offset to ro bit
+ 1094 DCEC  7E          		LD	A,(HL)
+ 1095 DCED  17          		RLA
+ 1096 DCEE  D0          		RET	NC		;return if not set
+ 1097 DCEF  21 D80F     loc_D908:	LD	HL,ROFERR
+ 1098 DCF2  C3 DAFC     		JP	GOERR;
+ 1099                   ;	jmp rof_error ;exit to read only disk message
+ 1100                   ;
+ 1101                   ;
+ 1102 DCF5              CHECK_WRITE:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  20
+BDOS    ASM
+
+ 1103                   ;check for write protected disk
+ 1104 DCF5  CD DCBF     		CALL	NOWRITE
+ 1105 DCF8  C8          		RET	Z		;ok to write if not rodsk
+ 1106 DCF9  21 D80D     		LD	HL,RODERR
+ 1107 DCFC  C3 DAFC     		JP	GOERR
+ 1108                   ;	jmp rod_error ;read only disk error
+ 1109                   ;
+ 1110 DCFF              GETDPTRA:
+ 1111                   ;compute the address of a directory element at
+ 1112                   ;positon dptr in the buffer
+ 1113 DCFF  2A E5A0     		LD	HL,(BUFFA)
+ 1114 DD02  3A E5D0     		LD	A,(DPTR);
+ 1115 DD05              ADDH:
+ 1116                   ;HL = HL + A
+ 1117 DD05  85          		ADD	A,L
+ 1118 DD06  6F          		LD	L,A
+ 1119 DD07  D0          		RET	NC
+ 1120                   ;overflow to H
+ 1121 DD08  24          		INC	H
+ 1122 DD09  C9          		RET
+ 1123                   ;
+ 1124                   ;
+ 1125 DD0A              GETMODNUM:
+ 1126                   ;compute the address of the module number
+ 1127                   ;bring module number to accumulator
+ 1128                   ;(high order bit is fwf (file write flag)
+ 1129 DD0A  2A DAF5     		LD	HL,(INFO)
+ 1130 DD0D  11 000E     		LD	DE,MODNUM
+ 1131 DD10  19          		ADD	HL,DE		;HL=.fcb(modnum)
+ 1132 DD11  7E          		LD	A,(HL)
+ 1133 DD12  C9          		RET			;A=fcb(modnum)
+ 1134                   ;
+ 1135 DD13              CLRMODNUM:
+ 1136                   ;clear the module number field for user open/make
+ 1137 DD13  CD DD0A     		CALL	GETMODNUM
+ 1138 DD16  36 00       		LD	(HL),0		;fcb(modnum)=0
+ 1139 DD18  C9          		RET
+ 1140                   ;
+ 1141 DD19              SETFWF:
+ 1142 DD19  CD DD0A     		CALL	GETMODNUM	;HL=.fcb(modnum), A=fcb(modnum)
+ 1143                   ;set fwf (file write flag) to "1"
+ 1144 DD1C  F6 80       		OR	FWFMSK
+ 1145 DD1E  77          		LD	(HL),A		;fcb(modnum)=fcb(modnum) or 80h
+ 1146                   ;also returns non zero in accumulator
+ 1147 DD1F  C9          		RET
+ 1148                   ;
+ 1149                   ;
+ 1150 DD20              COMPCDR:
+ 1151                   ;return cy if cdrmax > dcnt
+ 1152 DD20  2A E5D1     		LD	HL,(DCNT)
+ 1153 DD23  EB          		EX	DE,HL		;DE = directory counter
+ 1154 DD24  2A E59A     		LD	HL,(CDRMAXA)	;HL=.cdrmax
+ 1155 DD27  7B          		LD	A,E
+ 1156 DD28  96          		SUB	(HL)		;low(dcnt) - low(cdrmax)
+ 1157 DD29  23          		INC	HL		;HL = .cdrmax+1
+ 1158 DD2A  7A          		LD	A,D
+ 1159 DD2B  9E          		SBC	A,(HL)		;hig(dcnt) - hig(cdrmax)
+ 1160                   ;condition dcnt - cdrmax  produces cy if cdrmax>dcnt
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  21
+BDOS    ASM
+
+ 1161 DD2C  C9          		RET
+ 1162                   ;
+ 1163 DD2D              SETCDR:
+ 1164                   ;if not (cdrmax > dcnt) then cdrmax = dcnt+1
+ 1165 DD2D  CD DD20     		CALL	COMPCDR
+ 1166 DD30  D8          		RET	C		;return if cdrmax > dcnt
+ 1167                   ;otherwise, HL = .cdrmax+1, DE = dcnt
+ 1168 DD31  13          		INC	DE
+ 1169 DD32  72          		LD	(HL),D
+ 1170 DD33  2B          		DEC	HL
+ 1171 DD34  73          		LD	(HL),E
+ 1172 DD35  C9          		RET
+ 1173                   ;
+ 1174 DD36              SUBDH:
+ 1175                   ;compute HL = DE - HL
+ 1176 DD36  7B          		LD	A,E
+ 1177 DD37  95          		SUB	L
+ 1178 DD38  6F          		LD	L,A
+ 1179 DD39  7A          		LD	A,D
+ 1180 DD3A  9C          		SBC	A,H
+ 1181 DD3B  67          		LD	H,A
+ 1182 DD3C  C9          		RET
+ 1183                   ;
+ 1184 DD3D              NEWCHECKSUM:
+ 1185 DD3D  0E FF       		LD	C,TRUE_		;drop through to compute new checksum
+ 1186 DD3F              CHECKSUM:
+ 1187                   ;compute current checksum record and update the
+ 1188                   ;directory element if C=TRUE_, or check for = if not
+ 1189                   ;drec < chksiz?
+ 1190 DD3F  2A E5D3     		LD	HL,(DREC)
+ 1191 DD42  EB          		EX	DE,HL
+ 1192 DD43  2A E5B3     		LD	HL,(CHKSIZ)
+ 1193 DD46  CD DD36     		CALL	SUBDH		;DE-HL
+ 1194 DD49  D0          		RET	NC		;skip checksum if past checksum vector size
+ 1195                   ;drec < chksiz, so continue
+ 1196 DD4A  C5          		PUSH	BC		;save init flag
+ 1197 DD4B  CD DC9A     		CALL	COMPUTE_CS	;check sum value to A
+ 1198 DD4E  2A E5A4     		LD	HL,(CHECKA)	;address of check sum vector
+ 1199 DD51  EB          		EX	DE,HL
+ 1200 DD52  2A E5D3     		LD	HL,(DREC)	;value of drec
+ 1201 DD55  19          		ADD	HL,DE		;HL = .check(drec)
+ 1202 DD56  C1          		POP	BC		;recall TRUE_=0ffh or FALSE_=00 to C
+ 1203 DD57  0C          		INC	C		;0ffh produces zero flag
+ 1204 DD58  28 09       		Jr	Z,INITIAL_CS
+ 1205                   ;not initializing, compare
+ 1206 DD5A  BE          		CP	(HL)		;compute_cs=check(drec)?
+ 1207 DD5B  C8          		RET	Z		;no message if ok
+ 1208                   ;checksum error, are we beyond
+ 1209                   ;the end of the disk?
+ 1210 DD5C  CD DD20     		CALL	COMPCDR
+ 1211 DD5F  D0          		RET	NC		;no message if so
+ 1212 DD60  C3 DCCD     		jp	SET_RO		;read/only disk set
+ 1213 DD63              INITIAL_CS:
+ 1214                   ;initializing the checksum
+ 1215 DD63  77          		LD	(HL),A
+ 1216 DD64  C9          		RET
+ 1217                   ;
+ 1218                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  22
+BDOS    ASM
+
+ 1219 DD65              WRDIR:
+ 1220                   ;write the current directory entry, set checksum
+ 1221 DD65  CD DD3D     		CALL	NEWCHECKSUM	;initialize entry
+ 1222 DD68  CD DD7D     		CALL	SETDIR		;directory dma
+ 1223 DD6B  0E 01       		LD	C,1		;indicates a write directory operation
+ 1224 DD6D  CD DB67     		CALL	WRBUFF		;write the buffer
+ 1225 DD70  18 06       		Jr	SETDATA		;to data dma address
+ 1226                   ;ret
+ 1227                   ;
+ 1228 DD72              RD_DIR:
+ 1229                   ;read a directory entry into the directory buffer
+ 1230 DD72  CD DD7D     		CALL	SETDIR		;directory dma
+ 1231 DD75  CD DB62     		CALL	RDBUFF		;directory record loaded
+ 1232                   ; jmp setdata to data dma address
+ 1233                   ;ret
+ 1234                   ;
+ 1235 DD78              SETDATA:
+ 1236                   ;set data dma address
+ 1237 DD78  21 E598     		LD	HL,DMAAD
+ 1238 DD7B  18 03       		Jr	SETDMA		;to complete the call
+ 1239                   ;
+ 1240 DD7D              SETDIR:
+ 1241                   ;set directory dma address
+ 1242 DD7D  21 E5A0     		LD	HL,BUFFA	;jmp setdma to complete call
+ 1243                   ;
+ 1244 DD80              SETDMA:
+ 1245                   ;HL=.dma address to set (i.e., buffa or dmaad)
+ 1246 DD80  4E          		LD	C,(HL)
+ 1247 DD81  23          		INC	HL
+ 1248 DD82  46          		LD	B,(HL)		;parameter ready
+ 1249 DD83  C3 E624     		JP	SETDMAF
+ 1250                   ;
+ 1251                   ;
+ 1252 DD86              DIR_TO_USER:
+ 1253                   ;copy the directory entry to the user buffer
+ 1254                   ;after call to search or searchn by user code
+ 1255 DD86  2A E5A0     		LD	HL,(BUFFA)
+ 1256 DD89  EB          		EX	DE,HL		;source is directory buffer
+ 1257 DD8A  2A E598     		LD	HL,(DMAAD)	;destination is user dma address
+ 1258 DD8D  0E 80       		LD	C,RECSIZ	;copy entire record
+ 1259 DD8F  C3 DB01     		JP	MOVE
+ 1260                   ;ret
+ 1261                   ;
+ 1262 DD92              END_OF_DIR:
+ 1263                   ;return zero flag if at end of directory, non zero
+ 1264                   ;if not at end (end of dir if dcnt = 0ffffh)
+ 1265 DD92  21 E5D1     		LD	HL,DCNT
+ 1266 DD95  7E          		LD	A,(HL)		;may be 0ffh
+ 1267 DD96  23          		INC	HL
+ 1268 DD97  BE          		CP	(HL)		;low(dcnt) = high(dcnt)?
+ 1269 DD98  C0          		RET	NZ		;non zero returned if different
+ 1270                   ;high and low the same, = 0ffh?
+ 1271 DD99  3C          		INC	A		;0ffh becomes 00 if so
+ 1272 DD9A  C9          		RET
+ 1273                   ;
+ 1274 DD9B              SET_END_DIR:
+ 1275                   ;set dcnt to the end of the directory
+ 1276 DD9B  21 FFFF     		LD	HL,ENDDIR
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  23
+BDOS    ASM
+
+ 1277 DD9E  22 E5D1     		LD	(DCNT),HL
+ 1278 DDA1  C9          		RET
+ 1279                   ;
+ 1280 DDA2              READ_DIR:
+ 1281                   ;read next directory entry, with C=TRUE_ if initializing
+ 1282 DDA2  2A E5AF     		LD	HL,(DIRMAX)
+ 1283 DDA5  EB          		EX	DE,HL		;in preparation for subtract
+ 1284 DDA6  2A E5D1     		LD	HL,(DCNT)
+ 1285 DDA9  23          		INC	HL
+ 1286 DDAA  22 E5D1     		LD	(DCNT),HL	;dcnt=dcnt+1
+ 1287                   ;continue while dirmax >= dcnt (dirmax-dcnt no cy)
+ 1288 DDAD  CD DD36     		CALL	SUBDH		;DE-HL
+ 1289 DDB0  30 02       		Jr	NC,READ_DIR0
+ 1290                   ;yes, set dcnt to end of directory
+ 1291 DDB2  18 E7       		Jr	SET_END_DIR;
+ 1292                   ;		ret				;
+ 1293 DDB4              READ_DIR0:
+ 1294                   ;not at end of directory, seek next element
+ 1295                   ;initialization flag is in C
+ 1296 DDB4  3A E5D1     		LD	A,(DCNT)
+ 1297 DDB7  E6 03       		AND	DSKMSK		;low(dcnt) and dskmsk
+ 1298 DDB9  06 05       		LD	B,FCBSHF	;to multiply by fcb size
+ 1299 DDBB              READ_DIR1:
+ 1300 DDBB  87          		ADD	A,A
+ 1301 DDBC  05          		DEC	B
+ 1302 DDBD  20 FC       		Jr	NZ,READ_DIR1
+ 1303                   ;A = (low(dcnt) and dskmsk) shl fcbshf
+ 1304 DDBF  32 E5D0     		LD	(DPTR),A	;ready for next dir operation
+ 1305 DDC2  B7          		OR	A
+ 1306 DDC3  C0          		RET	NZ		;return if not a new record
+ 1307 DDC4  C5          		PUSH	BC		;save initialization flag C
+ 1308 DDC5  CD DB72     		CALL	SEEK_DIR	;seek proper record
+ 1309 DDC8  CD DD72     		CALL	RD_DIR		;read the directory record
+ 1310 DDCB  C1          		POP	BC		;recall initialization flag
+ 1311 DDCC  C3 DD3F     		JP	CHECKSUM	;checksum the directory elt
+ 1312                   ;ret
+ 1313                   ;
+ 1314                   ;
+ 1315 DDCF              GETALLOCBIT:
+ 1316                   ;given allocation vector position BC, return with byte
+ 1317                   ;containing BC shifted so that the least significant
+ 1318                   ;bit is in the low order accumulator position.  HL is
+ 1319                   ;the address of the byte for possible replacement in
+ 1320                   ;memory upon return, and D contains the number of shifts
+ 1321                   ;required to place the returned value back into position
+ 1322 DDCF  79          		LD	A,C
+ 1323 DDD0  E6 07       		AND	111B
+ 1324 DDD2  3C          		INC	A
+ 1325 DDD3  5F          		LD	E,A
+ 1326 DDD4  57          		LD	D,A
+ 1327                   ;d and e both contain the number of bit positions to shift
+ 1328 DDD5  79          		LD	A,C
+ 1329 DDD6  0F          		RRCA
+ 1330 DDD7  0F          		RRCA
+ 1331 DDD8  0F          		RRCA
+ 1332 DDD9  E6 1F       		AND	11111B
+ 1333 DDDB  4F          		LD	C,A		;C shr 3 to C
+ 1334 DDDC  78          		LD	A,B
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  24
+BDOS    ASM
+
+ 1335 DDDD  87          		ADD	A,A
+ 1336 DDDE  87          		ADD	A,A
+ 1337 DDDF  87          		ADD	A,A
+ 1338 DDE0  87          		ADD	A,A
+ 1339 DDE1  87          		ADD	A,A		;B shl 5
+ 1340 DDE2  B1          		OR	C
+ 1341 DDE3  4F          		LD	C,A		;bbbccccc to C
+ 1342 DDE4  78          		LD	A,B
+ 1343 DDE5  0F          		RRCA
+ 1344 DDE6  0F          		RRCA
+ 1345 DDE7  0F          		RRCA
+ 1346 DDE8  E6 1F       		AND	11111B
+ 1347 DDEA  47          		LD	B,A		;BC shr 3 to BC
+ 1348 DDEB  2A E5A6     		LD	HL,(ALLOCA)	;base address of allocation vector
+ 1349 DDEE  09          		ADD	HL,BC
+ 1350 DDEF  7E          		LD	A,(HL)		;byte to A, hl = .alloc(BC shr 3)
+ 1351                   ;now move the bit to the low order position of A
+ 1352 DDF0  07          ROTL:		RLCA
+ 1353 DDF1  1D          		DEC	E
+ 1354 DDF2  20 FC       		Jr	NZ,ROTL
+ 1355 DDF4  C9          		RET
+ 1356                   ;
+ 1357                   ;
+ 1358 DDF5              SETALLOCBIT:
+ 1359                   ;BC is the bit position of ALLOC to set or reset.  The
+ 1360                   ;value of the bit is in register E.
+ 1361 DDF5  D5          		PUSH	DE
+ 1362 DDF6  CD DDCF     		CALL	GETALLOCBIT	;shifted val A, count in D
+ 1363 DDF9  E6 FE       		AND	11111110B	;mask low bit to zero (may be set)
+ 1364 DDFB  C1          		POP	BC
+ 1365 DDFC  B1          		OR	C		;low bit of C is masked into A
+ 1366                   ;	jmp rotr ;to rotate back into proper position
+ 1367                   ;ret
+ 1368 DDFD              ROTR:
+ 1369                   ;byte value from ALLOC is in register A, with shift count
+ 1370                   ;in register C (to place bit back into position), and
+ 1371                   ;target ALLOC position in registers HL, rotate and replace
+ 1372 DDFD  0F          		RRCA
+ 1373 DDFE  15          		DEC	D
+ 1374 DDFF  20 FC       		Jr	NZ,ROTR		;back into position
+ 1375 DE01  77          		LD	(HL),A		;back to ALLOC
+ 1376 DE02  C9          		RET
+ 1377                   ;
+ 1378 DE03              SCANDM:
+ 1379                   ;scan the disk map addressed by dptr for non-zero
+ 1380                   ;entries, the allocation vector entry corresponding
+ 1381                   ;to a non-zero entry is set to the value of C (0,1)
+ 1382 DE03  CD DCFF     		CALL	GETDPTRA	;HL = buffa + dptr
+ 1383                   ;HL addresses the beginning of the directory entry
+ 1384 DE06  11 0010     		LD	DE,DSKMAP
+ 1385 DE09  19          		ADD	HL,DE		;hl now addresses the disk map
+ 1386 DE0A  C5          		PUSH	BC		;save the 0/1 bit to set
+ 1387 DE0B  0E 11       		LD	C,FCBLEN-DSKMAP+1	;size of single byte disk map + 1
+ 1388 DE0D              SCANDM0:
+ 1389                   ;loop once for each disk map entry
+ 1390 DE0D  D1          		POP	DE		;recall bit parity
+ 1391 DE0E  0D          		DEC	C
+ 1392 DE0F  C8          		RET	Z		;all done scanning?
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  25
+BDOS    ASM
+
+ 1393                   ;no, get next entry for scan
+ 1394 DE10  D5          		PUSH	DE		;replace bit parity
+ 1395 DE11  3A E5C4     		LD	A,(SINGLE)
+ 1396 DE14  B7          		OR	A
+ 1397 DE15  28 07       		Jr	Z,SCANDM1
+ 1398                   ;single byte scan operation
+ 1399 DE17  C5          		PUSH	BC		;save counter
+ 1400 DE18  E5          		PUSH	HL		;save map address
+ 1401 DE19  4E          		LD	C,(HL)
+ 1402 DE1A  06 00       		LD	B,0		;BC=block#
+ 1403 DE1C  18 06       		Jr	SCANDM2
+ 1404 DE1E              SCANDM1:
+ 1405                   ;double byte scan operation
+ 1406 DE1E  0D          		DEC	C		;count for double byte
+ 1407 DE1F  C5          		PUSH	BC		;save counter
+ 1408 DE20  4E          		LD	C,(HL)
+ 1409 DE21  23          		INC	HL
+ 1410 DE22  46          		LD	B,(HL)		;BC=block#
+ 1411 DE23  E5          		PUSH	HL		;save map address
+ 1412 DE24              SCANDM2:
+ 1413                   ;arrive here with BC=block#, E=0/1
+ 1414 DE24  79          		LD	A,C
+ 1415 DE25  B0          		OR	B		;skip if = 0000
+ 1416 DE26  28 0A       		Jr	Z,SCANM3
+ 1417 DE28  2A E5AD     		LD	HL,(MAXALL)	;check invalid index
+ 1418 DE2B  7D          		LD	A,L
+ 1419 DE2C  91          		SUB	C
+ 1420 DE2D  7C          		LD	A,H
+ 1421 DE2E  98          		SBC	A,B		;maxall - block#
+ 1422 DE2F  D4 DDF5     		CALL	NC,SETALLOCBIT	;
+ 1423                   ;bit set to 0/1
+ 1424 DE32              SCANM3:		;
+ 1425 DE32  E1          		POP	HL
+ 1426 DE33  23          		INC	HL		;to next bit position
+ 1427 DE34  C1          		POP	BC		;recall counter
+ 1428 DE35  18 D6       		Jr	SCANDM0		;for another item
+ 1429                   ;
+ 1430 DE37              INITIALIZE:
+ 1431                   ;initialize the current disk
+ 1432                   ;lret = FALSE_ ;set to TRUE_ if _ file exists
+ 1433                   ;compute the length of the allocation vector - 2
+ 1434 DE37  2A E5AD     		LD	HL,(MAXALL)
+ 1435 DE3A  0E 03       		LD	C,3		;perform maxall/8
+ 1436                   ;number of bytes in alloc vector is (maxall/8)+1
+ 1437 DE3C  CD DC8E     		CALL	HLROTR
+ 1438 DE3F  23          		INC	HL		;HL = maxall/8+1
+ 1439 DE40  44          		LD	B,H
+ 1440 DE41  4D          		LD	C,L		;count down BC til zero
+ 1441 DE42  2A E5A6     		LD	HL,(ALLOCA)	;base of allocation vector
+ 1442                   ;fill the allocation vector with zeros
+ 1443 DE45              INITIAL0:
+ 1444 DE45  36 00       		LD	(HL),0
+ 1445 DE47  23          		INC	HL		;alloc(i)=0
+ 1446 DE48  0B          		DEC	BC		;count length down
+ 1447 DE49  78          		LD	A,B
+ 1448 DE4A  B1          		OR	C
+ 1449 DE4B  20 F8       		Jr	NZ,INITIAL0
+ 1450                   ;set the reserved space for the directory
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  26
+BDOS    ASM
+
+ 1451 DE4D  2A E5B1     		LD	HL,(DIRBLK)
+ 1452 DE50  EB          		EX	DE,HL
+ 1453 DE51  2A E5A6     		LD	HL,(ALLOCA)	;HL=.alloc()
+ 1454 DE54  73          		LD	(HL),E
+ 1455 DE55  23          		INC	HL
+ 1456 DE56  72          		LD	(HL),D		;sets reserved directory blks
+ 1457                   ;allocation vector initialized, home disk
+ 1458 DE57  CD DB51     		CALL	HOME
+ 1459                   ;cdrmax = 3 (scans at least one directory record)
+ 1460 DE5A  2A E59A     		LD	HL,(CDRMAXA)
+ 1461 DE5D  36 03       		LD	(HL),3
+ 1462 DE5F  23          		INC	HL
+ 1463 DE60  36 00       		LD	(HL),0
+ 1464                   ;cdrmax = 0000
+ 1465 DE62  CD DD9B     		CALL	SET_END_DIR	;dcnt = enddir
+ 1466                   ;read directory entries and check for allocated storage
+ 1467 DE65              INITIAL2:
+ 1468 DE65  0E FF       		LD	C,TRUE_
+ 1469 DE67  CD DDA2     		CALL	READ_DIR
+ 1470 DE6A  CD DD92     		CALL	END_OF_DIR
+ 1471 DE6D  C8          		RET	Z		;return if end of directory
+ 1472                   ;not end of directory, valid entry?
+ 1473 DE6E  CD DCFF     		CALL	GETDPTRA	;HL = buffa + dptr
+ 1474 DE71  7E          		LD	A,(HL)
+ 1475 DE72  FE E5       		CP	EMPTY
+ 1476 DE74  28 EF       		Jr	Z,INITIAL2	;go get another item
+ 1477 DE76  23          		inc	hl
+ 1478 DE77  7E          		ld	a, (hl)
+ 1479 DE78  2B          		dec	hl
+ 1480 DE79  C6 10       		add	a, 10h
+ 1481 DE7B  FE 11       		cp	11h
+ 1482 DE7D  38 E6       		jr	c, initial2
+ 1483                   ;not empty, user code the same?
+ 1484 DE7F  3A DAF3     		LD	A,(USRCODE)
+ 1485 DE82  BE          		CP	(HL)
+ 1486 DE83  20 0A       		Jr	NZ,PDOLLAR
+ 1487                   ;same user code, check for '$' submit
+ 1488 DE85  23          		INC	HL
+ 1489 DE86  7E          		LD	A,(HL)		;first character
+ 1490 DE87  D6 24       		SUB	'$'		;dollar file?
+ 1491 DE89  20 04       		Jr	NZ,PDOLLAR
+ 1492                   ;dollar file found, mark in lret
+ 1493 DE8B  3D          		DEC	A
+ 1494 DE8C  32 DAF7     		LD	(LRET),A	;lret = 255
+ 1495 DE8F              PDOLLAR:
+ 1496                   ;now scan the disk map for allocated blocks
+ 1497 DE8F  0E 01       		LD	C,1		;set to allocated
+ 1498 DE91  CD DE03     		CALL	SCANDM
+ 1499 DE94  CD DD2D     		CALL	SETCDR		;set cdrmax to dcnt
+ 1500 DE97  18 CC       		Jr	INITIAL2	;for another entry
+ 1501                   ;
+ 1502 DE99              COPY_DIRLOC:
+ 1503                   ;copy directory location to lret following
+ 1504                   ;delete, rename, ... ops
+ 1505 DE99  3A E5BB     		LD	A,(DIRLOC)
+ 1506 DE9C  C3 DAA5     		JP	STA_RET;
+ 1507                   ;	ret						;
+ 1508                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  27
+BDOS    ASM
+
+ 1509 DE9F              COMPEXT:
+ 1510                   ;compare extent# in A with that in C, return nonzero
+ 1511                   ;if they do not match
+ 1512 DE9F  C5          		PUSH	BC		;save C's original value
+ 1513 DEA0  F5          		PUSH	AF
+ 1514 DEA1  3A E5AC     		LD	A,(EXTMSK)
+ 1515 DEA4  2F          		CPL
+ 1516 DEA5  47          		LD	B,A
+ 1517                   ;B has negated form of extent mask
+ 1518 DEA6  79          		LD	A,C
+ 1519 DEA7  A0          		AND	B
+ 1520 DEA8  4F          		LD	C,A		;low bits removed from C
+ 1521 DEA9  F1          		POP	AF
+ 1522 DEAA  A0          		AND	B		;low bits removed from A
+ 1523 DEAB  91          		SUB	C
+ 1524 DEAC  E6 1F       		AND	MAXEXT		;set flags
+ 1525 DEAE  C1          		POP	BC		;restore original values
+ 1526 DEAF  C9          		RET
+ 1527                   ;
+ 1528 DEB0              SEARCH:
+ 1529                   ;search for directory element of length C at info
+ 1530 DEB0  3E FF       		LD	A,0FFH
+ 1531 DEB2  32 E5BB     		LD	(DIRLOC),A	;changed if actually found
+ 1532 DEB5  21 E5BF     		LD	HL,SEARCHL
+ 1533 DEB8  71          		LD	(HL),C		;searchl = C
+ 1534 DEB9  2A DAF5     		LD	HL,(INFO)
+ 1535 DEBC  22 E5C0     		LD	(SEARCHA),HL	;searcha = info
+ 1536 DEBF  CD DD9B     		CALL	SET_END_DIR	;dcnt = enddir
+ 1537 DEC2  CD DB51     		CALL	HOME		;to start at the beginning
+ 1538                   ;(drop through to searchn)			;
+ 1539                   ;
+ 1540 DEC5              SEARCHN:
+ 1541                   ;search for the next directory element, assuming
+ 1542                   ;a previous call on search which sets searcha and
+ 1543                   ;searchl
+ 1544 DEC5  0E 00       		LD	C,FALSE_
+ 1545 DEC7  CD DDA2     		CALL	READ_DIR	;read next dir element
+ 1546 DECA  CD DD92     		CALL	END_OF_DIR
+ 1547 DECD  28 52       		Jr	Z,SEARCH_FIN	;skip to end if so
+ 1548                   ;not end of directory, scan for match
+ 1549 DECF  2A E5C0     		LD	HL,(SEARCHA)
+ 1550 DED2  EB          		EX	DE,HL		;DE=beginning of user fcb
+ 1551 DED3  1A          		LD	A,(DE)		;first character
+ 1552 DED4  FE E5       		CP	EMPTY		;keep scanning if empty
+ 1553 DED6  28 07       		Jr	Z,SEARCHNEXT
+ 1554                   ;not empty, may be end of logical directory
+ 1555 DED8  D5          		PUSH	DE		;save search address
+ 1556 DED9  CD DD20     		CALL	COMPCDR		;past logical end?
+ 1557 DEDC  D1          		POP	DE		;recall address
+ 1558 DEDD  30 42       		Jr	NC,SEARCH_FIN	;artificial stop
+ 1559 DEDF              SEARCHNEXT:
+ 1560 DEDF  CD DCFF     		CALL	GETDPTRA	;HL = buffa+dptr
+ 1561 DEE2  3A E5BF     		LD	A,(SEARCHL)
+ 1562 DEE5  4F          		LD	C,A		;length of search to c
+ 1563 DEE6  06 00       		LD	B,0		;b counts up, c counts down
+ 1564 DEE8              SEARCHLOOP:
+ 1565 DEE8  79          		LD	A,C
+ 1566 DEE9  B7          		OR	A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  28
+BDOS    ASM
+
+ 1567 DEEA  28 24       		Jr	Z,ENDSEARCH
+ 1568 DEEC  1A          		LD	A,(DE)
+ 1569 DEED  FE 3F       		CP	'?'
+ 1570 DEEF  28 19       		Jr	Z,SEARCHOK	;? matches all
+ 1571                   ;scan next character if not ubytes
+ 1572 DEF1  78          		LD	A,B
+ 1573 DEF2  FE 0D       		CP	UBYTES
+ 1574 DEF4  28 14       		Jr	Z,SEARCHOK
+ 1575                   ;not the ubytes field, extent field?
+ 1576 DEF6  FE 0C       		CP	EXTNUM		;may be extent field
+ 1577 DEF8  1A          		LD	A,(DE)		;fcb character
+ 1578 DEF9  28 07       		Jr	Z,SEARCHEXT	;skip to search extent
+ 1579 DEFB  96          		SUB	(HL)
+ 1580 DEFC  E6 7F       		AND	7FH		;mask-out flags/extent modulus
+ 1581 DEFE  20 C5       		Jr	NZ,SEARCHN	;skip if not matched
+ 1582 DF00  18 08       		Jr	SEARCHOK	;matched character
+ 1583 DF02              SEARCHEXT:
+ 1584                   ;A has fcb character
+ 1585                   ;attempt an extent # match
+ 1586 DF02  C5          		PUSH	BC		;save counters
+ 1587 DF03  4E          		LD	C,(HL)		;directory character to c
+ 1588 DF04  CD DE9F     		CALL	COMPEXT		;compare user/dir char
+ 1589 DF07  C1          		POP	BC		;recall counters
+ 1590 DF08  20 BB       		Jr	NZ,SEARCHN	;skip if no match
+ 1591 DF0A              SEARCHOK:
+ 1592                   ;current character matches
+ 1593 DF0A  13          		INC	DE
+ 1594 DF0B  23          		INC	HL
+ 1595 DF0C  04          		INC	B
+ 1596 DF0D  0D          		DEC	C
+ 1597 DF0E  18 D8       		Jr	SEARCHLOOP
+ 1598 DF10              ENDSEARCH:
+ 1599                   ;entire name matches, return dir position
+ 1600 DF10  3A E5D1     		LD	A,(DCNT)
+ 1601 DF13  E6 03       		AND	DSKMSK
+ 1602 DF15  32 DAF7     		LD	(LRET),A
+ 1603                   ;lret = low(dcnt) and 11b
+ 1604 DF18  21 E5BB     		LD	HL,DIRLOC
+ 1605 DF1B  7E          		LD	A,(HL)
+ 1606 DF1C  17          		RLA
+ 1607 DF1D  D0          		RET	NC		;dirloc=0ffh?
+ 1608                   ;yes, change it to 0 to mark as found
+ 1609 DF1E  AF          		XOR	A
+ 1610 DF1F  77          		LD	(HL),A		;dirloc=0
+ 1611 DF20  C9          		RET
+ 1612 DF21              SEARCH_FIN:
+ 1613                   ;end of directory, or empty name
+ 1614 DF21  CD DD9B     		CALL	SET_END_DIR	;may be artifical end
+ 1615 DF24  3E FF       		LD	A,255
+ 1616 DF26  C3 DAA5     		JP	STA_RET;
+ 1617                   ;
+ 1618                   ;
+ 1619 DF29              DELETE:
+ 1620                   ;delete the currently addressed file
+ 1621 DF29  CD DCF5     		CALL	CHECK_WRITE	;write protected?
+ 1622 DF2C  0E 0C       		LD	C,EXTNUM
+ 1623 DF2E  CD DEB0     		CALL	SEARCH		;search through file type
+ 1624 DF31              DELETE0:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  29
+BDOS    ASM
+
+ 1625                   ;loop while directory matches
+ 1626 DF31  CD DD92     		CALL	END_OF_DIR
+ 1627 DF34  C8          		RET	Z		;stop if end
+ 1628                   ;set each non zero disk map entry to 0
+ 1629                   ;in the allocation vector
+ 1630                   ;may be r/o file
+ 1631 DF35  CD DCE5     		CALL	CHECK_RODIR	;ro disk error if found
+ 1632 DF38  CD DCFF     		CALL	GETDPTRA	;HL=.buff(dptr)
+ 1633 DF3B  36 E5       		LD	(HL),EMPTY
+ 1634 DF3D  0E 00       		LD	C,0
+ 1635 DF3F  CD DE03     		CALL	SCANDM		;alloc elts set to 0
+ 1636 DF42  CD DD65     		CALL	WRDIR		;write the directory
+ 1637 DF45  CD DEC5     		CALL	SEARCHN		;to next element
+ 1638 DF48  18 E7       		Jr	DELETE0		;for another record
+ 1639                   ;
+ 1640 DF4A              GET_BLOCK:
+ 1641                   ;given allocation vector position BC, find the zero bit
+ 1642                   ;closest to this position by searching left and right.
+ 1643                   ;if found, set the bit to one and return the bit position
+ 1644                   ;in hl.  if not found (i.e., we pass 0 on the left, or
+ 1645                   ;maxall on the right), return 0000 in hl
+ 1646 DF4A  50          		LD	D,B
+ 1647 DF4B  59          		LD	E,C		;copy of starting position to de
+ 1648 DF4C              LEFTTST:
+ 1649 DF4C  79          		LD	A,C
+ 1650 DF4D  B0          		OR	B
+ 1651 DF4E  28 0B       		Jr	Z,RIGHTTST	;skip if left=0000
+ 1652                   ;left not at position zero, bit zero?
+ 1653 DF50  0B          		DEC	BC
+ 1654 DF51  D5          		PUSH	DE
+ 1655 DF52  C5          		PUSH	BC		;left,right pushed
+ 1656 DF53  CD DDCF     		CALL	GETALLOCBIT
+ 1657 DF56  1F          		RRA
+ 1658 DF57  30 1A       		Jr	NC,RETBLOCK	;return block number if zero
+ 1659                   ;bit is one, so try the right
+ 1660 DF59  C1          		POP	BC
+ 1661 DF5A  D1          		POP	DE		;left, right restored
+ 1662 DF5B              RIGHTTST:
+ 1663 DF5B  2A E5AD     		LD	HL,(MAXALL)	;value of maximum allocation#
+ 1664 DF5E  7B          		LD	A,E
+ 1665 DF5F  95          		SUB	L
+ 1666 DF60  7A          		LD	A,D
+ 1667 DF61  9C          		SBC	A,H		;right=maxall?
+ 1668 DF62  30 17       		Jr	NC,RETBLOCK0	;return block 0000 if so
+ 1669 DF64  13          		INC	DE
+ 1670 DF65  C5          		PUSH	BC
+ 1671 DF66  D5          		PUSH	DE		;left, right pushed
+ 1672 DF67  42          		LD	B,D
+ 1673 DF68  4B          		LD	C,E		;ready right for call
+ 1674 DF69  CD DDCF     		CALL	GETALLOCBIT
+ 1675 DF6C  1F          		RRA
+ 1676 DF6D  30 04       		Jr	NC,RETBLOCK	;return block number if zero
+ 1677 DF6F  D1          		POP	DE
+ 1678 DF70  C1          		POP	BC		;restore left and right pointers
+ 1679 DF71  18 D9       		Jr	LEFTTST		;for another attempt
+ 1680 DF73              RETBLOCK:
+ 1681 DF73  17          		RLA
+ 1682 DF74  3C          		INC	A		;bit back into position and set to 1
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  30
+BDOS    ASM
+
+ 1683                   ;d contains the number of shifts required to reposition
+ 1684 DF75  CD DDFD     		CALL	ROTR		;move bit back to position and store
+ 1685 DF78  E1          		POP	HL
+ 1686 DF79  D1          		POP	DE		;HL returned value, DE discarded
+ 1687 DF7A  C9          		RET
+ 1688 DF7B              RETBLOCK0:
+ 1689                   ;cannot find an available bit, return 0000
+ 1690 DF7B  79          		LD	A,C;
+ 1691 DF7C  B0          		OR	B
+ 1692 DF7D  20 CD       		Jr	NZ,LEFTTST	;also at beginning
+ 1693 DF7F  21 0000     		LD	HL,0000H
+ 1694 DF82  C9          		RET
+ 1695                   ;
+ 1696 DF83              COPY_FCB:
+ 1697                   ;copy the entire file control block
+ 1698 DF83  0E 00       		LD	C,0
+ 1699 DF85  1E 20       		LD	E,FCBLEN	;start at 0, to fcblen-1
+ 1700                   ;	jmp copy_dir			;
+ 1701                   ;
+ 1702 DF87              COPY_DIR:
+ 1703                   ;copy fcb information starting at C for E bytes
+ 1704                   ;into the currently addressed directory entry
+ 1705 DF87  D5          		PUSH	DE		;save length for later
+ 1706 DF88  06 00       		LD	B,0		;double index to BC
+ 1707 DF8A  2A DAF5     		LD	HL,(INFO)	;HL = source for data
+ 1708 DF8D  09          		ADD	HL,BC
+ 1709 DF8E  EB          		EX	DE,HL		;DE=.fcb(C), source for copy
+ 1710 DF8F  CD DCFF     		CALL	GETDPTRA	;HL=.buff(dptr), destination
+ 1711 DF92  C1          		POP	BC		;DE=source, HL=dest, C=length
+ 1712 DF93  CD DB01     		CALL	MOVE		;data moved
+ 1713 DF96              SEEK_COPY:
+ 1714                   ;enter from close to seek and copy current element
+ 1715 DF96  CD DB72     		CALL	SEEK_DIR	;to the directory element
+ 1716 DF99  C3 DD65     		JP	WRDIR		;write the directory element
+ 1717                   ;ret
+ 1718                   ;
+ 1719                   ;
+ 1720 DF9C              RENAME:
+ 1721                   ;rename the file described by the first half of
+ 1722                   ;the currently addressed file control block. the
+ 1723                   ;new name is contained in the last half of the
+ 1724                   ;currently addressed file conrol block.  the file
+ 1725                   ;name and type are changed, but the reel number
+ 1726                   ;is ignored.  the user number is identical
+ 1727 DF9C  CD DCF5     		CALL	CHECK_WRITE	;may be write protected
+ 1728                   ;search up to the extent field
+ 1729 DF9F  0E 0C       		LD	C,EXTNUM
+ 1730 DFA1  CD DEB0     		CALL	SEARCH
+ 1731                   ;copy position 0
+ 1732 DFA4  2A DAF5     		LD	HL,(INFO)
+ 1733 DFA7  E5          		push	hl
+ 1734 DFA8  DD E1       		pop	ix
+ 1735 DFAA  01 0C10     		ld	bc, 0C10h	;B=12 Ldnge fn C=DSKMAP
+ 1736                   ;extra Copy-Protection CP/A		
+ 1737 DFAD  DD CB 1B 7E 		bit	7, (ix+1Bh)	;T3 Bit 7 nfn (POWER SET -X)
+ 1738 DFB1  28 1E       		jr	z, loc_DBEA
+ 1739 DFB3  3E 24       		ld	a, '$'		;temp file *.$$$?
+ 1740 DFB5  DD BE 09    		cp	(ix+9)		;T1, Filetyp
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  31
+BDOS    ASM
+
+ 1741 DFB8  20 17       		jr	nz, loc_DBEA
+ 1742 DFBA  DD BE 0A    		cp	(ix+0Ah)	;T2, Filetyp
+ 1743 DFBD  20 12       		jr	nz, loc_DBEA
+ 1744 DFBF  DD BE 0B    		cp	(ix+0Bh)	;T3, Filetyp
+ 1745 DFC2  20 0D       		jr	nz, loc_DBEA
+ 1746 DFC4  21 DCEF     		ld	hl, loc_D908	;Abbruch mit FILE R/O
+ 1747 DFC7  E5          		push	hl
+ 1748 DFC8  21 DFED     		ld	hl, unk_DC06	;empty fcb
+ 1749 DFCB  22 DAF5     		ld	(info),	hl
+ 1750 DFCE  01 2000     		ld	bc, 2000h	;b=32 Ldnge leerer FCB, C=0 (Anfang FCB)
+ 1751 DFD1  C5          loc_DBEA:	push	bc
+ 1752 DFD2  DD 7E 00    		ld	a, (ix+0)	;A=fcb(0)
+ 1753 DFD5  DD 77 10    		ld	(ix+10h), a	;fcb(dskmap)=fcb(0)
+ 1754                   
+ 1755                   ;assume the same disk drive for new named file
+ 1756 DFD8              RENAME0:
+ 1757 DFD8  CD DD92     		CALL	END_OF_DIR
+ 1758 DFDB  28 0E       		jr	z, loc_DC04 	;stop at end of dir
+ 1759                   ;not end of directory, rename next element
+ 1760 DFDD  CD DCE5     		CALL	CHECK_RODIR	;may be read-only file
+ 1761 DFE0  C1          		pop	bc
+ 1762 DFE1  C5          		push	bc
+ 1763 DFE2  58          		ld	e, b		;Anz. zu kopierender Bytes
+ 1764 DFE3  CD DF87     		CALL	COPY_DIR
+ 1765                   ;element renamed, move to next
+ 1766 DFE6  CD DEC5     		CALL	SEARCHN
+ 1767 DFE9  18 ED       		Jr	RENAME0
+ 1768                   ;
+ 1769 DFEB  C1          loc_DC04:	pop	bc
+ 1770 DFEC  C9          		ret
+ 1771                   
+ 1772 DFED  E5 E5 E5 E5 unk_DC06:	ds	32,0E5H	        ;empty fcb
+ 1773                   
+ 1774 E00D              INDICATORS:
+ 1775                   ;set file indicators for current fcb
+ 1776 E00D  0E 0C       		LD	C,EXTNUM
+ 1777 E00F  CD DEB0     		CALL	SEARCH		;through file type
+ 1778 E012              INDIC0:
+ 1779 E012  CD DD92     		CALL	END_OF_DIR
+ 1780 E015  C8          		RET	Z		;stop at end of dir
+ 1781                   ;not end of directory, continue to change
+ 1782 E016  0E 00       		LD	C,0
+ 1783 E018  1E 0C       		LD	E,EXTNUM	;copy name
+ 1784 E01A  CD DF87     		CALL	COPY_DIR
+ 1785 E01D  CD DEC5     		CALL	SEARCHN
+ 1786 E020  18 F0       		Jr	INDIC0
+ 1787                   ;
+ 1788 E022              OPEN:
+ 1789                   ;search for the directory entry, copy to fcb
+ 1790 E022  0E 0F       		LD	C,NAMLEN
+ 1791 E024  CD DEB0     		CALL	SEARCH
+ 1792 E027  CD DD92     		CALL	END_OF_DIR
+ 1793 E02A  C8          		RET	Z		;return with lret=255 if end
+ 1794                   ;not end of directory, copy fcb information
+ 1795 E02B              OPEN_COPY:
+ 1796                   ;(referenced below to copy fcb info)
+ 1797 E02B  CD DC4B     		CALL	GETEXTA
+ 1798 E02E  7E          		LD	A,(HL)
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  32
+BDOS    ASM
+
+ 1799 E02F  F5          		PUSH	AF
+ 1800 E030  E5          		PUSH	HL		;save extent#
+ 1801 E031  CD DCFF     		CALL	GETDPTRA
+ 1802 E034  EB          		EX	DE,HL		;DE = .buff(dptr)
+ 1803 E035  2A DAF5     		LD	HL,(INFO)	;HL=.fcb(0)
+ 1804 E038  0E 20       		LD	C,NXTREC	;length of move operation
+ 1805 E03A  D5          		PUSH	DE		;save .buff(dptr)
+ 1806 E03B  CD DB01     		CALL	MOVE		;from .buff(dptr) to .fcb(0)
+ 1807                   ;note that entire fcb is copied, including indicators
+ 1808 E03E  CD DD19     		CALL	SETFWF		;sets file write flag
+ 1809 E041  D1          		POP	DE
+ 1810 E042  21 000C     		LD	HL,EXTNUM
+ 1811 E045  19          		ADD	HL,DE		;HL=.buff(dptr+extnum)
+ 1812 E046  4E          		LD	C,(HL)		;C = directory extent number
+ 1813 E047  21 000F     		LD	HL,RECCNT
+ 1814 E04A  19          		ADD	HL,DE		;HL=.buff(dptr+reccnt)
+ 1815 E04B  46          		LD	B,(HL)		;B holds directory record count
+ 1816 E04C  E1          		POP	HL
+ 1817 E04D  F1          		POP	AF
+ 1818 E04E  77          		LD	(HL),A		;restore extent number
+ 1819                   ;HL = .user extent#, B = dir rec cnt, C = dir extent#
+ 1820                   ;if user ext < dir ext then user := 128 records
+ 1821                   ;if user ext = dir ext then user := dir records
+ 1822                   ;if user ext > dir ext then user := 0 records
+ 1823 E04F  79          		LD	A,C
+ 1824 E050  BE          		CP	(HL)
+ 1825 E051  78          		LD	A,B		;ready dir reccnt
+ 1826 E052  28 06       		Jr	Z,OPEN_RCNT	;if same, user gets dir reccnt
+ 1827 E054  3E 00       		LD	A,0
+ 1828 E056  38 02       		Jr	C,OPEN_RCNT	;user is larger
+ 1829 E058  3E 80       		LD	A,128		;directory is larger
+ 1830 E05A              OPEN_RCNT:	;A has record count to fill
+ 1831 E05A  2A DAF5     		LD	HL,(INFO)
+ 1832 E05D  11 000F     		LD	DE,RECCNT
+ 1833 E060  19          		ADD	HL,DE
+ 1834 E061  77          		LD	(HL),A
+ 1835 E062  C9          		RET
+ 1836                   ;
+ 1837 E063              MERGEZERO:
+ 1838                   ;HL = .fcb1(i), DE = .fcb2(i),
+ 1839                   ;if fcb1(i) = 0 then fcb1(i) := fcb2(i)
+ 1840 E063  7E          		LD	A,(HL)
+ 1841 E064  23          		INC	HL
+ 1842 E065  B6          		OR	(HL)
+ 1843 E066  2B          		DEC	HL
+ 1844 E067  C0          		RET	NZ		;return if = 0000
+ 1845 E068  1A          		LD	A,(DE)
+ 1846 E069  77          		LD	(HL),A
+ 1847 E06A  13          		INC	DE
+ 1848 E06B  23          		INC	HL		;low byte copied
+ 1849 E06C  1A          		LD	A,(DE)
+ 1850 E06D  77          		LD	(HL),A
+ 1851 E06E  1B          		DEC	DE
+ 1852 E06F  2B          		DEC	HL		;back to input form
+ 1853 E070  C9          		RET
+ 1854                   ;
+ 1855 E071              CLOSE:
+ 1856                   ;locate the directory element and re-write it
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  33
+BDOS    ASM
+
+ 1857 E071  AF          		XOR	A
+ 1858 E072  32 DAF7     		LD	(LRET),A
+ 1859 E075  32 E5D1     		LD	(DCNT),A
+ 1860 E078  32 E5D2     		LD	(DCNT+1),A;
+ 1861 E07B  CD DCBF     		CALL	NOWRITE
+ 1862 E07E  C0          		RET	NZ		;skip close if r/o disk
+ 1863                   ;check file write flag - 0 indicates written
+ 1864 E07F  CD DD0A     		CALL	GETMODNUM	;fcb(modnum) in A
+ 1865 E082  E6 80       		AND	FWFMSK
+ 1866 E084  C0          		RET	NZ		;return if bit remains set
+ 1867 E085  0E 0F       		LD	C,NAMLEN
+ 1868 E087  CD DEB0     		CALL	SEARCH		;locate file
+ 1869 E08A  CD DD92     		CALL	END_OF_DIR
+ 1870 E08D  C8          		RET	Z		;return if not found
+ 1871                   ;merge the disk map at info with that at buff(dptr)
+ 1872 E08E  01 0010     		LD	BC,DSKMAP
+ 1873 E091  CD DCFF     		CALL	GETDPTRA
+ 1874 E094  09          		ADD	HL,BC
+ 1875 E095  EB          		EX	DE,HL		;DE is .buff(dptr+16)
+ 1876 E096  2A DAF5     		LD	HL,(INFO)
+ 1877 E099  09          		ADD	HL,BC		;DE=.buff(dptr+16), HL=.fcb(16)
+ 1878                   ;lo              function x,x&255
+ 1879 E09A  0E 10       		LD	C,FCBLEN-DSKMAP ;length of single byte dm
+ 1880 E09C              MERGE0:
+ 1881 E09C  3A E5C4     		LD	A,(SINGLE)
+ 1882 E09F  B7          		OR	A
+ 1883 E0A0  28 10       		Jr	Z,MERGED	;skip to double
+ 1884                   ;this is a single byte map
+ 1885                   ;if fcb(i) = 0 then fcb(i) = buff(i)
+ 1886                   ;if buff(i) = 0 then buff(i) = fcb(i)
+ 1887                   ;if fcb(i) <> buff(i) then error
+ 1888 E0A2  7E          		LD	A,(HL)
+ 1889 E0A3  B7          		OR	A
+ 1890 E0A4  1A          		LD	A,(DE)
+ 1891 E0A5  20 01       		Jr	NZ,FCBNZERO
+ 1892                   ;fcb(i) = 0
+ 1893 E0A7  77          		LD	(HL),A		;fcb(i) = buff(i)
+ 1894 E0A8              FCBNZERO:
+ 1895 E0A8  B7          		OR	A
+ 1896 E0A9  20 02       		Jr	NZ,BUFFNZERO
+ 1897                   ;buff(i) = 0
+ 1898 E0AB  7E          		LD	A,(HL)
+ 1899 E0AC  12          		LD	(DE),A		;buff(i)=fcb(i)
+ 1900 E0AD              BUFFNZERO:
+ 1901 E0AD  BE          		CP	(HL)
+ 1902 E0AE  20 35       		Jr	NZ,MERGERR	;fcb(i) = buff(i)?
+ 1903 E0B0  18 13       		Jr	DMSET		;if merge ok
+ 1904 E0B2              MERGED:
+ 1905                   ;this is a double byte merge operation
+ 1906 E0B2  CD E063     		CALL	MERGEZERO	;buff = fcb if buff 0000
+ 1907 E0B5  EB          		EX	DE,HL
+ 1908 E0B6  CD E063     		CALL	MERGEZERO
+ 1909 E0B9  EB          		EX	DE,HL		;fcb = buff if fcb 0000
+ 1910                   ;they should be identical at this point
+ 1911 E0BA  1A          		LD	A,(DE)
+ 1912 E0BB  BE          		CP	(HL)
+ 1913 E0BC  20 27       		Jr	NZ,MERGERR	;low same?
+ 1914 E0BE  13          		INC	DE
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  34
+BDOS    ASM
+
+ 1915 E0BF  23          		INC	HL		;to high byte
+ 1916 E0C0  1A          		LD	A,(DE)
+ 1917 E0C1  BE          		CP	(HL)
+ 1918 E0C2  20 21       		Jr	NZ,MERGERR	;high same?
+ 1919                   ;merge operation ok for this pair
+ 1920 E0C4  0D          		DEC	C		;extra count for double byte
+ 1921 E0C5              DMSET:
+ 1922 E0C5  13          		INC	DE
+ 1923 E0C6  23          		INC	HL		;to next byte position
+ 1924 E0C7  0D          		DEC	C
+ 1925 E0C8  20 D2       		Jr	NZ,MERGE0	;for more
+ 1926                   ;end of disk map merge, check record count
+ 1927                   ;DE = .buff(dptr)+32, HL = .fcb(32)
+ 1928 E0CA  01 FFEC     		LD	BC,-(FCBLEN-EXTNUM)
+ 1929 E0CD  09          		ADD	HL,BC
+ 1930 E0CE  EB          		EX	DE,HL
+ 1931 E0CF  09          		ADD	HL,BC
+ 1932                   ;DE = .fcb(extnum), HL = .buff(dptr+extnum)
+ 1933 E0D0  1A          		LD	A,(DE)		;current user extent number
+ 1934                   ;if fcb(ext) >= buff(fcb) then
+ 1935                   ;buff(ext) := fcb(ext), buff(rec) := fcb(rec)
+ 1936 E0D1  BE          		CP	(HL)
+ 1937 E0D2  38 09       		Jr	C,ENDMERGE
+ 1938                   ;fcb extent number >= dir extent number
+ 1939 E0D4  77          		LD	(HL),A		;buff(ext) = fcb(ext)
+ 1940                   ;update directory record count field
+ 1941 E0D5  01 0003     		LD	BC,RECCNT-EXTNUM
+ 1942 E0D8  09          		ADD	HL,BC
+ 1943 E0D9  EB          		EX	DE,HL
+ 1944 E0DA  09          		ADD	HL,BC
+ 1945                   ;DE=.buff(reccnt), HL=.fcb(reccnt)
+ 1946 E0DB  7E          		LD	A,(HL)
+ 1947 E0DC  12          		LD	(DE),A		;buff(reccnt)=fcb(reccnt)
+ 1948 E0DD              ENDMERGE:
+ 1949 E0DD  3E FF       		LD	A,TRUE_
+ 1950 E0DF  32 E5B9     		LD	(FCB_COPIED),A	;mark as copied
+ 1951 E0E2  C3 DF96     		JP	SEEK_COPY	;ok to "wrdir" here - 1.4 compat
+ 1952                   ;		ret				;
+ 1953 E0E5              MERGERR:
+ 1954                   ;elements did not merge correctly
+ 1955 E0E5  21 DAF7     		LD	HL,LRET
+ 1956 E0E8  35          		DEC	(HL)		;=255 non zero flag set
+ 1957 E0E9  C9          		RET
+ 1958                   ;
+ 1959 E0EA              MAKE:
+ 1960                   ;create a new file by creating a directory entry
+ 1961                   ;then opening the file
+ 1962 E0EA  CD DCF5     		CALL	CHECK_WRITE	;may be write protected
+ 1963 E0ED  2A DAF5     		LD	HL,(INFO)
+ 1964 E0F0  E5          		PUSH	HL		;save fcb address, look for e5
+ 1965 E0F1  21 E593     		LD	HL,EFCB
+ 1966 E0F4  22 DAF5     		LD	(INFO),HL	;info = .empty
+ 1967 E0F7  0E 01       		LD	C,1
+ 1968 E0F9  CD DEB0     		CALL	SEARCH		;length 1 match on empty entry
+ 1969 E0FC  CD DD92     		CALL	END_OF_DIR	;zero flag set if no space
+ 1970 E0FF  E1          		POP	HL		;recall info address
+ 1971 E100  22 DAF5     		LD	(INFO),HL	;in case we return here
+ 1972 E103  C8          		RET	Z		;return with error condition 255 if not found
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  35
+BDOS    ASM
+
+ 1973 E104  EB          		EX	DE,HL		;DE = info address
+ 1974                   ;clear the remainder of the fcb
+ 1975 E105  21 000F     		LD	HL,NAMLEN
+ 1976 E108  19          		ADD	HL,DE		;HL=.fcb(namlen)
+ 1977 E109  0E 11       		LD	C,FCBLEN-NAMLEN	;number of bytes to fill
+ 1978 E10B  AF          		XOR	A		;clear accumulator to 00 for fill
+ 1979 E10C              MAKE0:
+ 1980 E10C  77          		LD	(HL),A
+ 1981 E10D  23          		INC	HL
+ 1982 E10E  0D          		DEC	C
+ 1983 E10F  20 FB       		Jr	NZ,MAKE0
+ 1984 E111  21 000D     		LD	HL,UBYTES
+ 1985 E114  19          		ADD	HL,DE		;HL = .fcb(ubytes)
+ 1986 E115  77          		LD	(HL),A		;fcb(ubytes) = 0
+ 1987 E116  CD DD2D     		CALL	SETCDR		;may have extended the directory
+ 1988                   ;now copy entry to the directory
+ 1989 E119  CD DF83     		CALL	COPY_FCB
+ 1990                   ;and set the file write flag to "1"
+ 1991 E11C  C3 DD19     		JP	SETFWF
+ 1992                   ;ret
+ 1993                   ;
+ 1994 E11F              OPEN_REEL:
+ 1995                   ;close the current extent, and open the next one
+ 1996                   ;if possible.  RMF is TRUE_ if in read mode
+ 1997 E11F  AF          		XOR	A
+ 1998 E120  32 E5B9     		LD	(FCB_COPIED),A	;set TRUE_ if actually copied
+ 1999 E123  CD E071     		CALL	CLOSE		;close current extent
+ 2000                   ;lret remains at enddir if we cannot open the next ext
+ 2001 E126  CD DD92     		CALL	END_OF_DIR
+ 2002 E129  C8          		RET	Z		;return if end
+ 2003                   ;increment extent number
+ 2004 E12A  2A DAF5     		LD	HL,(INFO)
+ 2005 E12D  01 000C     		LD	BC,EXTNUM
+ 2006 E130  09          		ADD	HL,BC		;HL=.fcb(extnum)
+ 2007 E131  7E          		LD	A,(HL)
+ 2008 E132  3C          		INC	A
+ 2009 E133  E6 1F       		AND	MAXEXT
+ 2010 E135  77          		LD	(HL),A		;fcb(extnum)=++1
+ 2011 E136  28 0D       		Jr	Z,OPEN_MOD	;move to next module if zero
+ 2012                   ;may be in the same extent group
+ 2013 E138  47          		LD	B,A
+ 2014 E139  3A E5AC     		LD	A,(EXTMSK)
+ 2015 E13C  A0          		AND	B
+ 2016                   ;if result is zero, then not in the same group
+ 2017 E13D  21 E5B9     		LD	HL,FCB_COPIED	;TRUE_ if the fcb was copied to directory
+ 2018 E140  A6          		AND	(HL)		;produces a 00 in accumulator if not written
+ 2019 E141  28 0C       		Jr	Z,OPEN_REEL0	;go to next physical extent
+ 2020                   ;result is non zero, so we must be in same logical ext
+ 2021 E143  18 24       		Jr	OPEN_REEL1	;to copy fcb information
+ 2022 E145              OPEN_MOD:
+ 2023                   ;extent number overflow, go to next module
+ 2024 E145  01 0002     		LD	BC,MODNUM-EXTNUM
+ 2025 E148  09          		ADD	HL,BC		;HL=.fcb(modnum)
+ 2026 E149  34          		INC	(HL)		;fcb(modnum)=++1
+ 2027                   ;module number incremented, check for overflow
+ 2028 E14A  7E          		LD	A,(HL)
+ 2029 E14B  E6 0F       		AND	MAXMOD		;mask high order bits
+ 2030 E14D  28 24       		Jr	Z,OPEN_R_ERR	;cannot overflow to zero
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  36
+BDOS    ASM
+
+ 2031                   ;otherwise, ok to continue with new module
+ 2032 E14F              OPEN_REEL0:
+ 2033 E14F  0E 0F       		LD	C,NAMLEN
+ 2034 E151  CD DEB0     		CALL	SEARCH		;next extent found?
+ 2035 E154  CD DD92     		CALL	END_OF_DIR
+ 2036 E157  20 10       		Jr	NZ,OPEN_REEL1
+ 2037                   ;end of file encountered
+ 2038 E159  3A E5BA     		LD	A,(RMF)
+ 2039 E15C  3C          		INC	A		;0ffh becomes 00 if read
+ 2040 E15D  28 14       		Jr	Z,OPEN_R_ERR	;sets lret = 1
+ 2041                   ;try to extend the current file
+ 2042 E15F  CD E0EA     		CALL	MAKE
+ 2043                   ;cannot be end of directory
+ 2044 E162  CD DD92     		CALL	END_OF_DIR
+ 2045 E165  28 0C       		Jr	Z,OPEN_R_ERR	;with lret = 1
+ 2046 E167  18 03       		Jr	OPEN_REEL2
+ 2047 E169              OPEN_REEL1:
+ 2048                   ;not end of file, open
+ 2049 E169  CD E02B     		CALL	OPEN_COPY
+ 2050 E16C              OPEN_REEL2:
+ 2051 E16C  CD DC60     		CALL	GETFCB		;set parameters
+ 2052 E16F  AF          		XOR	A
+ 2053 E170  C3 DAA5     		JP	STA_RET		;lret = 0	;
+ 2054                   ;			ret ;with lret = 0
+ 2055 E173              OPEN_R_ERR:
+ 2056                   ;cannot move to next extent of this file
+ 2057 E173  CD DAA9     		CALL	SETLRET1	;lret = 1
+ 2058 E176  C3 DD19     		JP	SETFWF		;ensure that it will not be closed
+ 2059                   ;ret
+ 2060                   ;
+ 2061 E179              SEQDISKREAD:
+ 2062                   ;sequential disk read operation
+ 2063 E179  3E 01       		LD	A,1
+ 2064 E17B  32 E5BC     		LD	(SEQIO),A
+ 2065                   ;drop through to diskread
+ 2066                   ;
+ 2067 E17E              DISKREAD: ;(may enter from seqdiskread)
+ 2068 E17E  3E FF       		LD	A,TRUE_
+ 2069 E180  32 E5BA     		LD	(RMF),A		;read mode flag = TRUE_ (open_reel)
+ 2070                   ;read the next record from the current fcb
+ 2071 E183  CD DC60     		CALL	GETFCB		;sets parameters for the read
+ 2072 E186  3A E5CA     		LD	A,(VRECORD)
+ 2073 E189  21 E5C8     		LD	HL,RCOUNT
+ 2074 E18C  BE          		CP	(HL)		;vrecord-rcount
+ 2075                   ;skip if rcount > vrecord
+ 2076 E18D  38 11       		Jr	C,RECORDOK
+ 2077                   ;not enough records in the extent
+ 2078                   ;record count must be 128 to continue
+ 2079 E18F  FE 80       		CP	128		;vrecord = 128?
+ 2080 E191  20 21       		Jr	NZ,DISKEOF	;skip if vrecord<>128
+ 2081 E193  CD E11F     		CALL	OPEN_REEL	;go to next extent if so
+ 2082 E196  AF          		XOR	A
+ 2083 E197  32 E5CA     		LD	(VRECORD),A	;vrecord=00
+ 2084                   ;now check for open ok
+ 2085 E19A  3A DAF7     		LD	A,(LRET)
+ 2086 E19D  B7          		OR	A
+ 2087 E19E  20 14       		Jr	NZ,DISKEOF	;stop at eof
+ 2088 E1A0              RECORDOK:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  37
+BDOS    ASM
+
+ 2089                   ;arrive with fcb addressing a record to read
+ 2090 E1A0  CD DC1D     		CALL	INDEX
+ 2091                   ;error 2 if reading unwritten data
+ 2092                   ;(returns 1 to be compatible with 1.4)
+ 2093 E1A3  CD DC2A     		CALL	ALLOCATED	;arecord=0000?
+ 2094 E1A6  28 0C       		Jr	Z,DISKEOF
+ 2095                   ;record has been allocated, read it
+ 2096 E1A8  CD DC30     		CALL	ATRAN		;arecord now a disk address
+ 2097 E1AB  CD DB80     		CALL	SEEK		;to proper track,sector
+ 2098 E1AE  CD DB62     		CALL	RDBUFF		;to dma address
+ 2099 E1B1  C3 DC77     		JP	SETFCB		;replace parameter
+ 2100                   ;		ret					;
+ 2101 E1B4              DISKEOF:
+ 2102 E1B4  C3 DAA9     		JP	SETLRET1	;lret = 1
+ 2103                   ;ret
+ 2104                   ;
+ 2105 E1B7              SEQDISKWRITE:
+ 2106                   ;sequential disk write
+ 2107 E1B7  3E 01       		LD	A,1
+ 2108 E1B9  32 E5BC     		LD	(SEQIO),A
+ 2109                   ;drop through to diskwrite
+ 2110                   ;
+ 2111 E1BC              DISKWRITE:	;(may enter here from seqdiskwrite above)
+ 2112 E1BC  3E 00       		LD	A,FALSE_
+ 2113 E1BE  32 E5BA     		LD	(RMF),A		;read mode flag
+ 2114                   ;write record to currently selected file
+ 2115 E1C1  CD DCF5     		CALL	CHECK_WRITE	;in case write protected
+ 2116 E1C4  2A DAF5     		LD	HL,(INFO)	;HL = .fcb(0)
+ 2117 E1C7  CD DCE8     		CALL	CHECK_ROFILE	;may be a read-only file
+ 2118 E1CA  CD DC60     		CALL	GETFCB		;to set local parameters
+ 2119 E1CD  3A E5CA     		LD	A,(VRECORD)
+ 2120 E1D0  FE 80       		CP	LSTREC+1	;vrecord-128
+ 2121                   ;skip if vrecord > lstrec
+ 2122                   ;vrecord = 128, cannot open next extent
+ 2123 E1D2  D2 DAA9     		JP	NC,SETLRET1	;lret=1		;
+ 2124 E1D5              DISKWR0:
+ 2125                   ;can write the next record, so continue
+ 2126 E1D5  CD DC1D     		CALL	INDEX
+ 2127 E1D8  CD DC2A     		CALL	ALLOCATED
+ 2128 E1DB  0E 00       		LD	C,0		;marked as normal write operation for wrbuff
+ 2129 E1DD  20 43       		Jr	NZ,DISKWR1
+ 2130                   ;not allocated
+ 2131                   ;the argument to getblock is the starting
+ 2132                   ;position for the disk search, and should be
+ 2133                   ;the last allocated block for this file, or
+ 2134                   ;the value 0 if no space has been allocated
+ 2135 E1DF  CD DBE8     		CALL	DM_POSITION
+ 2136 E1E2  32 E5BE     		LD	(DMINX),A	;save for later
+ 2137 E1E5  01 0000     		LD	BC,0000H	;may use block zero
+ 2138 E1E8  B7          		OR	A
+ 2139 E1E9  28 07       		Jr	Z,NOPBLOCK	;skip if no previous block
+ 2140                   ;previous block exists at A
+ 2141 E1EB  4F          		LD	C,A
+ 2142 E1EC  0B          		DEC	BC		;previous block # in BC
+ 2143 E1ED  CD DC05     		CALL	GETDM		;previous block # to HL
+ 2144 E1F0  44          		LD	B,H
+ 2145 E1F1  4D          		LD	C,L		;BC=prev block#
+ 2146 E1F2              NOPBLOCK:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  38
+BDOS    ASM
+
+ 2147                   ;BC = 0000, or previous block #
+ 2148 E1F2  CD DF4A     		CALL	GET_BLOCK	;block # to HL
+ 2149                   ;arrive here with block# or zero
+ 2150 E1F5  7D          		LD	A,L
+ 2151 E1F6  B4          		OR	H
+ 2152 E1F7  20 05       		Jr	NZ,BLOCKOK
+ 2153                   ;cannot find a block to allocate
+ 2154 E1F9  3E 02       		LD	A,2
+ 2155 E1FB  C3 DAA5     		JP	STA_RET		;lret=2
+ 2156 E1FE              BLOCKOK:
+ 2157                   ;allocated block number is in HL
+ 2158 E1FE  22 E5CC     		LD	(ARECORD),HL
+ 2159 E201  EB          		EX	DE,HL		;block number to DE
+ 2160 E202  2A DAF5     		LD	HL,(INFO)
+ 2161 E205  01 0010     		LD	BC,DSKMAP
+ 2162 E208  09          		ADD	HL,BC		;HL=.fcb(dskmap)
+ 2163 E209  3A E5C4     		LD	A,(SINGLE)
+ 2164 E20C  B7          		OR	A		;set flags for single byte dm
+ 2165 E20D  3A E5BE     		LD	A,(DMINX)	;recall dm index
+ 2166 E210  28 06       		Jr	Z,ALLOCWD	;skip if allocating word
+ 2167                   ;allocating a byte value
+ 2168 E212  CD DD05     		CALL	ADDH
+ 2169 E215  73          		LD	(HL),E		;single byte alloc
+ 2170 E216  18 08       		Jr	DISKWRU		;to continue
+ 2171 E218              ALLOCWD:
+ 2172                   ;allocate a word value
+ 2173 E218  4F          		LD	C,A
+ 2174 E219  06 00       		LD	B,0		;double(dminx)
+ 2175 E21B  09          		ADD	HL,BC
+ 2176 E21C  09          		ADD	HL,BC		;HL=.fcb(dminx*2)
+ 2177 E21D  73          		LD	(HL),E
+ 2178 E21E  23          		INC	HL
+ 2179 E21F  72          		LD	(HL),D		;double wd
+ 2180 E220              DISKWRU:
+ 2181                   ;disk write to previously unallocated block
+ 2182 E220  0E 02       		LD	C,2		;marked as unallocated write
+ 2183 E222              DISKWR1:
+ 2184                   ;continue the write operation of no allocation error
+ 2185                   ;C = 0 if normal write, 2 if to prev unalloc block
+ 2186 E222  3A DAF7     		LD	A,(LRET)
+ 2187 E225  B7          		OR	A
+ 2188 E226  C0          		RET	NZ		;stop if non zero returned value
+ 2189 E227  C5          		PUSH	BC		;save write flag
+ 2190 E228  CD DC30     		CALL	ATRAN		;arecord set
+ 2191 E22B  3A E5BC     		LD	A,(SEQIO)
+ 2192 E22E  3D          		DEC	A
+ 2193 E22F  3D          		DEC	A
+ 2194 E230  20 3A       		Jr	NZ,DISKWR11;
+ 2195 E232  C1          		POP	BC
+ 2196 E233  C5          		PUSH	BC
+ 2197 E234  79          		LD	A,C
+ 2198 E235  3D          		DEC	A
+ 2199 E236  3D          		DEC	A;
+ 2200 E237  20 33       		Jr	NZ,DISKWR11	;old allocation
+ 2201 E239  E5          		PUSH	HL		;arecord in hl ret from atran
+ 2202 E23A  2A E5A0     		LD	HL,(BUFFA)
+ 2203 E23D  57          		LD	D,A		;zero buffa & fill
+ 2204 E23E  77          FILL0:		LD	(HL),A
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  39
+BDOS    ASM
+
+ 2205 E23F  23          		INC	HL
+ 2206 E240  14          		INC	D
+ 2207 E241  F2 E23E     		JP	P,FILL0;
+ 2208 E244  CD DD7D     		CALL	SETDIR
+ 2209 E247  2A E5CE     		LD	HL,(ARECORD1);
+ 2210 E24A  0E 02       		LD	C,2;
+ 2211 E24C  22 E5CC     FILL1:		LD	(ARECORD),HL
+ 2212 E24F  C5          		PUSH	BC
+ 2213 E250  CD DB80     		CALL	SEEK
+ 2214 E253  C1          		POP	BC;
+ 2215 E254  CD DB67     		CALL	WRBUFF		;write fill record	;
+ 2216 E257  2A E5CC     		LD	HL,(ARECORD)
+ 2217                   ;restore last record
+ 2218 E25A  0E 00       		LD	C,0		;change  allocate flag
+ 2219 E25C  3A E5AB     		LD	A,(BLKMSK)
+ 2220 E25F  47          		LD	B,A
+ 2221 E260  A5          		AND	L
+ 2222 E261  B8          		CP	B
+ 2223 E262  23          		INC	HL;
+ 2224 E263  20 E7       		Jr	NZ,FILL1	;cont until cluster is zeroed
+ 2225 E265  E1          		POP	HL
+ 2226 E266  22 E5CC     		LD	(ARECORD),HL
+ 2227 E269  CD DD78     		CALL	SETDATA
+ 2228 E26C              DISKWR11:	;
+ 2229 E26C  CD DB80     		CALL	SEEK		;to proper file position
+ 2230 E26F  C1          		POP	BC
+ 2231 E270  C5          		PUSH	BC		;restore/save write flag (C=2 if new block)
+ 2232 E271  CD DB67     		CALL	WRBUFF		;written to disk
+ 2233 E274  C1          		POP	BC		;C = 2 if a new block was allocated, 0 if not
+ 2234                   ;increment record count if rcount<=vrecord
+ 2235 E275  3A E5CA     		LD	A,(VRECORD)
+ 2236 E278  21 E5C8     		LD	HL,RCOUNT
+ 2237 E27B  BE          		CP	(HL)		;vrecord-rcount
+ 2238 E27C  38 04       		Jr	C,DISKWR2
+ 2239                   ;rcount <= vrecord
+ 2240 E27E  77          		LD	(HL),A
+ 2241 E27F  34          		INC	(HL)		;rcount = vrecord+1
+ 2242 E280  0E 02       		LD	C,2		;mark as record count incremented
+ 2243 E282              DISKWR2:
+ 2244                   ;A has vrecord, C=2 if new block or new record#
+ 2245                   ;patch for blocking/deblocking error
+ 2246 E282  00          		nop
+ 2247 E283  00          		nop
+ 2248 E284  21 D800     		ld	hl, 0d800h	;value will not used
+ 2249                   ;orig
+ 2250                   ;		DEC	C
+ 2251                   ;		DEC	C
+ 2252                   ;		JP	NZ,NOUPDATE
+ 2253 E287  F5          		PUSH	AF		;save vrecord value
+ 2254 E288  CD DD0A     		CALL	GETMODNUM	;HL=.fcb(modnum), A=fcb(modnum)
+ 2255                   ;reset the file write flag to mark as written fcb
+ 2256 E28B  E6 7F       		AND	A,(~FWFMSK) & 0FFH	;bit reset
+ 2257 E28D  77          		LD	(HL),A		;fcb(modnum) = fcb(modnum) and 7fh
+ 2258 E28E  F1          		POP	AF		;restore vrecord
+ 2259 E28F              NOUPDATE:
+ 2260                   ;check for end of extent, if found attempt to open
+ 2261                   ;next extent in preparation for next write
+ 2262 E28F  FE 7F       		CP	LSTREC		;vrecord=lstrec?
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  40
+BDOS    ASM
+
+ 2263 E291  20 1A       		Jr	NZ,DISKWR3	;skip if not
+ 2264                   ;may be random access write, if so we are done
+ 2265                   ;change next
+ 2266 E293  3A E5BC     		LD	A,(SEQIO)
+ 2267 E296  FE 01       		CP	1
+ 2268 E298  20 13       		Jr	NZ,DISKWR3	;skip next extent open op
+ 2269                   ;update current fcb before going to next extent
+ 2270 E29A  CD DC77     		CALL	SETFCB
+ 2271 E29D  CD E11F     		CALL	OPEN_REEL	;rmf=FALSE_
+ 2272                   ;vrecord remains at lstrec causing eof if
+ 2273                   ;no more directory space is available
+ 2274 E2A0  21 DAF7     		LD	HL,LRET
+ 2275 E2A3  7E          		LD	A,(HL)
+ 2276 E2A4  B7          		OR	A
+ 2277 E2A5  20 04       		Jr	NZ,NOSPACE
+ 2278                   ;space available, set vrecord=255
+ 2279 E2A7  3D          		DEC	A
+ 2280 E2A8  32 E5CA     		LD	(VRECORD),A	;goes to 00 next time
+ 2281 E2AB              NOSPACE:
+ 2282 E2AB  36 00       		LD	(HL),0		;lret = 00 for returned value
+ 2283 E2AD              DISKWR3:
+ 2284 E2AD  C3 DC77     		JP	SETFCB		;replace parameters
+ 2285                   ;ret
+ 2286                   ;
+ 2287 E2B0              RSEEK:
+ 2288                   ;random access seek operation, C=0ffh if read mode
+ 2289                   ;fcb is assumed to address an active file control block
+ 2290                   ;(modnum has been set to 1100_0000b if previous bad seek)
+ 2291 E2B0  AF          		XOR	A
+ 2292 E2B1  32 E5BC     		LD	(SEQIO),A	;marked as random access operation
+ 2293 E2B4              RSEEK1:
+ 2294 E2B4  C5          		PUSH	BC		;save r/w flag
+ 2295 E2B5  2A DAF5     		LD	HL,(INFO)
+ 2296 E2B8  EB          		EX	DE,HL		;DE will hold base of fcb
+ 2297 E2B9  21 0021     		LD	HL,RANREC
+ 2298 E2BC  19          		ADD	HL,DE		;HL=.fcb(ranrec)
+ 2299 E2BD  7E          		LD	A,(HL)
+ 2300 E2BE  E6 7F       		AND	7FH
+ 2301 E2C0  F5          		PUSH	AF		;record number
+ 2302 E2C1  7E          		LD	A,(HL)
+ 2303 E2C2  17          		RLA	;cy=lsb of extent#
+ 2304 E2C3  23          		INC	HL
+ 2305 E2C4  7E          		LD	A,(HL)
+ 2306 E2C5  17          		RLA
+ 2307 E2C6  E6 1F       		AND	11111B		;A=ext#
+ 2308 E2C8  4F          		LD	C,A		;C holds extent number, record stacked
+ 2309 E2C9  7E          		LD	A,(HL)
+ 2310 E2CA  1F          		RRA
+ 2311 E2CB  1F          		RRA
+ 2312 E2CC  1F          		RRA
+ 2313 E2CD  1F          		RRA
+ 2314 E2CE  E6 0F       		AND	1111B		;mod#
+ 2315 E2D0  47          		LD	B,A		;B holds module#, C holds ext#
+ 2316 E2D1  F1          		POP	AF		;recall sought record #
+ 2317                   ;check to insure that high byte of ran rec = 00
+ 2318 E2D2  23          		INC	HL
+ 2319 E2D3  6E          		LD	L,(HL)		;l=high byte (must be 00)
+ 2320 E2D4  2C          		INC	L
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  41
+BDOS    ASM
+
+ 2321 E2D5  2D          		DEC	L
+ 2322 E2D6  2E 06       		LD	L,6		;zero flag, l=6
+ 2323                   ;produce error 6, seek past physical eod
+ 2324 E2D8  20 57       		Jr	NZ,SEEKERR
+ 2325                   ;otherwise, high byte = 0, A = sought record
+ 2326 E2DA  21 0020     		LD	HL,NXTREC
+ 2327 E2DD  19          		ADD	HL,DE		;HL = .fcb(nxtrec)
+ 2328 E2DE  77          		LD	(HL),A		;sought rec# stored away
+ 2329                   ;arrive here with B=mod#, C=ext#, DE=.fcb, rec stored
+ 2330                   ;the r/w flag is still stacked.  compare fcb values
+ 2331 E2DF  21 000C     		LD	HL,EXTNUM
+ 2332 E2E2  19          		ADD	HL,DE
+ 2333 E2E3  79          		LD	A,C		;A=seek ext#
+ 2334 E2E4  96          		SUB	(HL)
+ 2335 E2E5  20 0A       		Jr	NZ,RANCLOSE	;tests for = extents
+ 2336                   ;extents match, check mod#
+ 2337 E2E7  21 000E     		LD	HL,MODNUM
+ 2338 E2EA  19          		ADD	HL,DE
+ 2339 E2EB  78          		LD	A,B		;B=seek mod#
+ 2340                   ;could be overflow at eof, producing module#
+ 2341                   ;of 90H or 10H, so compare all but fwf
+ 2342 E2EC  96          		SUB	(HL)
+ 2343 E2ED  E6 7F       		AND	7FH
+ 2344 E2EF  28 34       		Jr	Z,SEEKOK	;same?
+ 2345 E2F1              RANCLOSE:
+ 2346 E2F1  C5          		PUSH	BC
+ 2347 E2F2  D5          		PUSH	DE		;save seek mod#,ext#, .fcb
+ 2348 E2F3  CD E071     		CALL	CLOSE		;current extent closed
+ 2349 E2F6  D1          		POP	DE
+ 2350 E2F7  C1          		POP	BC		;recall parameters and fill
+ 2351 E2F8  2E 03       		LD	L,3		;cannot close error #3
+ 2352 E2FA  3A DAF7     		LD	A,(LRET)
+ 2353 E2FD  3C          		INC	A
+ 2354 E2FE  28 2A       		Jr	Z,BADSEEK
+ 2355 E300  21 000C     		LD	HL,EXTNUM
+ 2356 E303  19          		ADD	HL,DE
+ 2357 E304  71          		LD	(HL),C		;fcb(extnum)=ext#
+ 2358 E305  21 000E     		LD	HL,MODNUM
+ 2359 E308  19          		ADD	HL,DE
+ 2360 E309  70          		LD	(HL),B		;fcb(modnum)=mod#
+ 2361 E30A  CD E022     		CALL	OPEN		;is the file present?
+ 2362 E30D  3A DAF7     		LD	A,(LRET)
+ 2363 E310  3C          		INC	A
+ 2364 E311  20 12       		Jr	NZ,SEEKOK	;open successful?
+ 2365                   ;cannot open the file, read mode?
+ 2366 E313  C1          		POP	BC		;r/w flag to c (=0ffh if read)
+ 2367 E314  C5          		PUSH	BC		;everyone expects this item stacked
+ 2368 E315  2E 04       		LD	L,4		;seek to unwritten extent #4
+ 2369 E317  0C          		INC	C		;becomes 00 if read operation
+ 2370 E318  28 10       		Jr	Z,BADSEEK	;skip to error if read operation
+ 2371                   ;write operation, make new extent
+ 2372 E31A  CD E0EA     		CALL	MAKE
+ 2373 E31D  2E 05       		LD	L,5		;cannot create new extent #5
+ 2374 E31F  3A DAF7     		LD	A,(LRET)
+ 2375 E322  3C          		INC	A
+ 2376 E323  28 05       		Jr	Z,BADSEEK	;no dir space
+ 2377                   ;file make operation successful
+ 2378 E325              SEEKOK:
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  42
+BDOS    ASM
+
+ 2379 E325  C1          		POP	BC		;discard r/w flag
+ 2380 E326  AF          		XOR	A
+ 2381 E327  C3 DAA5     		JP	STA_RET		;with zero set
+ 2382 E32A              BADSEEK:
+ 2383                   ;fcb no longer contains a valid fcb, mark
+ 2384                   ;with 1100_000b in modnum field so that it
+ 2385                   ;appears as overflow with file write flag set
+ 2386 E32A  E5          		PUSH	HL		;save error flag
+ 2387 E32B  CD DD0A     		CALL	GETMODNUM	;HL = .modnum
+ 2388 E32E  36 C0       		LD	(HL),11000000B
+ 2389 E330  E1          		POP	HL		;and drop through
+ 2390 E331              SEEKERR:
+ 2391 E331  C1          		POP	BC		;discard r/w flag
+ 2392 E332  7D          		LD	A,L
+ 2393 E333  32 DAF7     		LD	(LRET),A	;lret=#, nonzero
+ 2394                   ;setfwf returns non-zero accumulator for err
+ 2395 E336  C3 DD19     		JP	SETFWF		;flag set, so subsequent close ok
+ 2396                   ;ret
+ 2397                   ;
+ 2398 E339              RANDISKREAD:
+ 2399                   ;random disk read operation
+ 2400 E339  0E FF       		LD	C,TRUE_		;marked as read operation
+ 2401 E33B  CD E2B0     		CALL	RSEEK
+ 2402 E33E  CC E17E     		CALL	Z,DISKREAD	;if seek successful
+ 2403 E341  C9          		RET
+ 2404                   ;
+ 2405 E342              RANDISKWRITE:
+ 2406                   ;random disk write operation
+ 2407 E342  0E 00       		LD	C,FALSE_	;marked as write operation
+ 2408 E344  CD E2B0     		CALL	RSEEK
+ 2409 E347  CC E1BC     		CALL	Z,DISKWRITE	;if seek successful
+ 2410 E34A  C9          		RET
+ 2411                   ;
+ 2412 E34B              COMPUTE_RR:
+ 2413                   ;compute random record position for getfilesize/setrandom
+ 2414 E34B  EB          		EX	DE,HL
+ 2415 E34C  19          		ADD	HL,DE
+ 2416                   ;DE=.buf(dptr) or .fcb(0), HL = .f(nxtrec/reccnt)
+ 2417 E34D  4E          		LD	C,(HL)
+ 2418 E34E  06 00       		LD	B,0		;BC = 0000 0000 ?rrr rrrr
+ 2419 E350  21 000C     		LD	HL,EXTNUM
+ 2420 E353  19          		ADD	HL,DE
+ 2421 E354  7E          		LD	A,(HL)
+ 2422 E355  0F          		RRCA
+ 2423 E356  E6 80       		AND	80H		;A=e000 0000
+ 2424 E358  81          		ADD	A,C
+ 2425 E359  4F          		LD	C,A
+ 2426 E35A  3E 00       		LD	A,0
+ 2427 E35C  88          		ADC	A,B
+ 2428 E35D  47          		LD	B,A
+ 2429                   ;BC = 0000 000? errrr rrrr
+ 2430 E35E  7E          		LD	A,(HL)
+ 2431 E35F  0F          		RRCA
+ 2432 E360  E6 0F       		AND	0FH
+ 2433 E362  80          		ADD	A,B
+ 2434 E363  47          		LD	B,A
+ 2435                   ;BC = 000? eeee errrr rrrr
+ 2436 E364  21 000E     		LD	HL,MODNUM
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  43
+BDOS    ASM
+
+ 2437 E367  19          		ADD	HL,DE
+ 2438 E368  7E          		LD	A,(HL)		;A=XXX? mmmm
+ 2439 E369  87          		ADD	A,A
+ 2440 E36A  87          		ADD	A,A
+ 2441 E36B  87          		ADD	A,A
+ 2442 E36C  87          		ADD	A,A		;cy=? A=mmmm 0000
+ 2443 E36D  F5          		PUSH	AF
+ 2444 E36E  80          		ADD	A,B
+ 2445 E36F  47          		LD	B,A
+ 2446                   ;cy=?, BC = mmmm eeee errr rrrr
+ 2447 E370  F5          		PUSH	AF		;possible second carry
+ 2448 E371  E1          		POP	HL		;cy = lsb of L
+ 2449 E372  7D          		LD	A,L		;cy = lsb of A
+ 2450 E373  E1          		POP	HL		;cy = lsb of L
+ 2451 E374  B5          		OR	L		;cy/cy = lsb of A
+ 2452 E375  E6 01       		AND	1		;A = 0000 000? possible carry-out
+ 2453 E377  C9          		RET
+ 2454                   ;
+ 2455 E378              GETFILESIZE:
+ 2456                   ;compute logical file size for current fcb
+ 2457 E378  0E 0C       		LD	C,EXTNUM
+ 2458 E37A  CD DEB0     		CALL	SEARCH
+ 2459                   ;zero the receiving ranrec field
+ 2460 E37D  2A DAF5     		LD	HL,(INFO)
+ 2461 E380  11 0021     		LD	DE,RANREC
+ 2462 E383  19          		ADD	HL,DE
+ 2463 E384  E5          		PUSH	HL		;save position
+ 2464 E385  72          		LD	(HL),D
+ 2465 E386  23          		INC	HL
+ 2466 E387  72          		LD	(HL),D
+ 2467 E388  23          		INC	HL
+ 2468 E389  72          		LD	(HL),D		;=00 00 00
+ 2469 E38A              GETSIZE:
+ 2470 E38A  CD DD92     		CALL	END_OF_DIR
+ 2471 E38D  28 20       		Jr	Z,SETSIZE
+ 2472                   ;current fcb addressed by dptr
+ 2473 E38F  CD DCFF     		CALL	GETDPTRA
+ 2474 E392  11 000F     		LD	DE,RECCNT	;ready for compute size
+ 2475 E395  CD E34B     		CALL	COMPUTE_RR
+ 2476                   ;A=0000 000? BC = mmmm eeee errr rrrr
+ 2477                   ;compare with memory, larger?
+ 2478 E398  E1          		POP	HL
+ 2479 E399  E5          		PUSH	HL		;recall, replace .fcb(ranrec)
+ 2480 E39A  5F          		LD	E,A		;save cy
+ 2481 E39B  79          		LD	A,C
+ 2482 E39C  96          		SUB	(HL)
+ 2483 E39D  23          		INC	HL		;ls byte
+ 2484 E39E  78          		LD	A,B
+ 2485 E39F  9E          		SBC	A,(HL)
+ 2486 E3A0  23          		INC	HL		;middle byte
+ 2487 E3A1  7B          		LD	A,E
+ 2488 E3A2  9E          		SBC	A,(HL)		;carry if .fcb(ranrec) > directory
+ 2489 E3A3  38 05       		Jr	C,GETNEXTSIZE	;for another try
+ 2490                   ;fcb is less or equal, fill from directory
+ 2491 E3A5  73          		LD	(HL),E
+ 2492 E3A6  2B          		DEC	HL
+ 2493 E3A7  70          		LD	(HL),B
+ 2494 E3A8  2B          		DEC	HL
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  44
+BDOS    ASM
+
+ 2495 E3A9  71          		LD	(HL),C
+ 2496 E3AA              GETNEXTSIZE:
+ 2497 E3AA  CD DEC5     		CALL	SEARCHN
+ 2498 E3AD  18 DB       		Jr	GETSIZE
+ 2499 E3AF              SETSIZE:
+ 2500 E3AF  E1          		POP	HL		;discard .fcb(ranrec)
+ 2501 E3B0  C9          		RET
+ 2502                   ;
+ 2503 E3B1              SETRANDOM:
+ 2504                   ;set random record from the current file control block
+ 2505 E3B1  2A DAF5     		LD	HL,(INFO)
+ 2506 E3B4  11 0020     		LD	DE,NXTREC	;ready params for computesize
+ 2507 E3B7  CD E34B     		CALL	COMPUTE_RR	;DE=info, A=cy, BC=mmmm eeee errr rrrr
+ 2508 E3BA  21 0021     		LD	HL,RANREC
+ 2509 E3BD  19          		ADD	HL,DE		;HL = .fcb(ranrec)
+ 2510 E3BE  71          		LD	(HL),C
+ 2511 E3BF  23          		INC	HL
+ 2512 E3C0  70          		LD	(HL),B
+ 2513 E3C1  23          		INC	HL
+ 2514 E3C2  77          		LD	(HL),A		;to ranrec
+ 2515 E3C3  C9          		RET
+ 2516                   ;
+ 2517 E3C4              SELECT:
+ 2518                   ;select disk info for subsequent input or output ops
+ 2519 E3C4  2A E596     		LD	HL,(DLOG)
+ 2520 E3C7  3A DAF4     		LD	A,(CURDSK)
+ 2521 E3CA  4F          		LD	C,A
+ 2522 E3CB  CD DC8E     		CALL	HLROTR
+ 2523 E3CE  E5          		PUSH	HL
+ 2524 E3CF  EB          		EX	DE,HL		;save it for test below, send to seldsk
+ 2525 E3D0  CD DB0A     		CALL	SELECTDISK
+ 2526 E3D3  E1          		POP	HL		;recall dlog vector
+ 2527 E3D4  CC DAF9     		CALL	Z,SEL_ERROR	;returns TRUE_ if select ok
+ 2528                   ;is the disk logged in?
+ 2529 E3D7  7D          		LD	A,L
+ 2530 E3D8  1F          		RRA
+ 2531 E3D9  D8          		RET	C		;return if bit is set
+ 2532                   ;disk not logged in, set bit and initialize
+ 2533 E3DA  2A E596     		LD	HL,(DLOG)
+ 2534 E3DD  4D          		LD	C,L
+ 2535 E3DE  44          		LD	B,H		;call ready
+ 2536 E3DF  CD DCAC     		CALL	SET_CDISK
+ 2537 E3E2  22 E596     		LD	(DLOG),HL	;dlog=set_cdisk(dlog)
+ 2538 E3E5  C3 DE37     		JP	INITIALIZE
+ 2539                   ;ret
+ 2540                   ;
+ 2541 E3E8  3E FF       func14x:	ld	a, 0FFh
+ 2542 E3EA  32 E5C6     		ld	(olddsk), a
+ 2543                   
+ 2544 E3ED              CURSELECT:
+ 2545 E3ED  3A E5BD     		LD	A,(LINFO)
+ 2546 E3F0  21 DAF4     		LD	HL,CURDSK
+ 2547 E3F3  BE          		CP	(HL)
+ 2548 E3F4  C8          		RET	Z		;skip if linfo=curdsk
+ 2549 E3F5  77          		LD	(HL),A		;curdsk=info
+ 2550 E3F6  18 CC       		Jr	SELECT
+ 2551                   ;ret
+ 2552                   ;
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  45
+BDOS    ASM
+
+ 2553 E3F8              RESELECT:
+ 2554                   ;check current fcb to see if reselection necessary
+ 2555 E3F8  3E FF       		LD	A,TRUE_
+ 2556 E3FA  32 E5C5     		LD	(RESEL),A	;mark possible reselect
+ 2557 E3FD  2A DAF5     		LD	HL,(INFO)
+ 2558 E400  7E          		LD	A,(HL)		;drive select code
+ 2559 E401  E6 1F       		AND	11111B		;non zero is auto drive select
+ 2560 E403  3D          		DEC	A		;drive code normalized to 0..30, or 255
+ 2561 E404  FE 1E       		CP	30
+ 2562 E406  DA E41B     		jp	c, loc_E034
+ 2563 E409  21 E5C6     		ld	hl, olddsk
+ 2564 E40C  7E          		ld	a, (hl)
+ 2565 E40D  3C          		inc	a
+ 2566 E40E  28 24       		jr	z, noselect
+ 2567 E410  36 FF       		ld	(hl), 0FFh
+ 2568 E412  3D          		dec	a
+ 2569 E413  32 E5BD     		ld	(linfo), a
+ 2570 E416  CD E3ED     		call	curselect
+ 2571 E419  18 19       		jr	noselect
+ 2572                   
+ 2573 E41B  32 E5BD     loc_E034:	ld	(linfo), a
+ 2574 E41E  3A E5C6     		ld	a, (olddsk)
+ 2575 E421  3C          		inc	a
+ 2576 E422  20 06       		jr	nz, loc_E043
+ 2577                   ;auto select function, save curdsk
+ 2578 E424  3A DAF4     		LD	A,(CURDSK)
+ 2579 E427  32 E5C6     		LD	(OLDDSK),A	;olddsk=curdsk
+ 2580 E42A  7E          loc_E043:	LD	A,(HL)
+ 2581 E42B  32 E5C7     		LD	(FCBDSK),A	;save drive code
+ 2582 E42E  E6 E0       		AND	11100000B
+ 2583 E430  77          		LD	(HL),A		;preserve hi bits
+ 2584 E431  CD E3ED     		CALL	CURSELECT
+ 2585 E434              NOSELECT:
+ 2586                   ;set user code
+ 2587 E434  3A DAF3     		LD	A,(USRCODE)	;0...31
+ 2588 E437  2A DAF5     		LD	HL,(INFO)
+ 2589 E43A  B6          		OR	(HL)
+ 2590 E43B  77          		LD	(HL),A
+ 2591 E43C  C9          		RET
+ 2592                   ;
+ 2593                   ;	individual function handlers
+ 2594 E43D              FUNC12:
+ 2595                   ;return version number
+ 2596 E43D  3E 22       		LD	A,DVERS
+ 2597 E43F  C3 DAA5     		JP	STA_RET		;lret = dvers (high = 00)
+ 2598                   ;	ret ;jmp goback
+ 2599                   ;
+ 2600 E442              FUNC13:
+ 2601                   ;reset disk system - initialize to disk 0
+ 2602 E442  3E FF       		ld	a, 0FFh
+ 2603 E444  32 E5C6     		ld	(olddsk), a
+ 2604 E447  21 0000     		LD	HL,0
+ 2605 E44A  22 E594     		LD	(RODSK),HL
+ 2606 E44D  22 E596     		LD	(DLOG),HL
+ 2607 E450  21 E5D5     		ld	hl, DISKO
+ 2608 E453  7E          		ld	a, (hl)
+ 2609 E454  FE FF       		cp	0FFh
+ 2610 E456  20 06       		jr	nz, FUNC13a
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  46
+BDOS    ASM
+
+ 2611 E458  3A 0004     		ld	a, (DISKA)	;current disk
+ 2612 E45B  E6 0F       		and	0Fh
+ 2613 E45D  77          		ld	(hl), a
+ 2614 E45E  32 DAF4     FUNC13a:	LD	(CURDSK),A	;note that usrcode remains unchanged
+ 2615 E461  32 DAF8     		ld	(aret+1), a
+ 2616 E464  21 0080     		LD	HL,TBUFF
+ 2617 E467  22 E598     		LD	(DMAAD),HL	;dmaad = tbuff
+ 2618 E46A  CD DD78     		CALL	SETDATA		;to data dma address
+ 2619 E46D  C3 E3C4     		JP	SELECT
+ 2620                   ;ret ;jmp goback
+ 2621                   ;
+ 2622         E3E8      FUNC14		EQU	FUNC14x;
+ 2623                   ;select disk info
+ 2624                   ;ret ;jmp goback
+ 2625                   ;
+ 2626 E470              FUNC15:
+ 2627                   ;open file
+ 2628 E470  CD DD13     		CALL	CLRMODNUM	;clear the module number
+ 2629 E473  CD E3F8     		CALL	RESELECT
+ 2630 E476  C3 E022     		JP	OPEN
+ 2631                   ;ret ;jmp goback
+ 2632                   ;
+ 2633 E479              FUNC16:
+ 2634                   ;close file
+ 2635 E479  CD E3F8     		CALL	RESELECT
+ 2636 E47C  C3 E071     		JP	CLOSE
+ 2637                   ;ret ;jmp goback
+ 2638                   ;
+ 2639 E47F              FUNC17:
+ 2640                   ;search for first occurrence of a file
+ 2641 E47F  0E 00       		LD	C,0		;length assuming '?' TRUE_
+ 2642 E481  EB          		EX	DE,HL		;was lhld info
+ 2643 E482  7E          		LD	A,(HL)
+ 2644 E483  FE 3F       		CP	'?'		;no reselect if ?
+ 2645 E485  28 0E       		Jr	Z,QSELECT	;skip reselect if so
+ 2646                   ;normal search
+ 2647 E487  CD DC4B     		CALL	GETEXTA
+ 2648 E48A  7E          		LD	A,(HL)
+ 2649 E48B  FE 3F       		CP	'?'	;
+ 2650 E48D  C4 DD13     		CALL	NZ,CLRMODNUM	;module number zeroed
+ 2651 E490  CD E3F8     		CALL	RESELECT
+ 2652 E493  0E 0F       		LD	C,NAMLEN
+ 2653 E495              QSELECT:
+ 2654 E495  CD DEB0     		CALL	SEARCH
+ 2655 E498  C3 DD86     		JP	DIR_TO_USER	;copy directory entry to user
+ 2656                   ;ret ;jmp goback
+ 2657                   ;
+ 2658 E49B              FUNC18:
+ 2659                   ;search for next occurrence of a file name
+ 2660 E49B  2A E5C0     		LD	HL,(SEARCHA)
+ 2661 E49E  22 DAF5     		LD	(INFO),HL
+ 2662 E4A1  CD E3F8     		CALL	RESELECT
+ 2663 E4A4  CD DEC5     		CALL	SEARCHN
+ 2664 E4A7  C3 DD86     		JP	DIR_TO_USER	;copy directory entry to user
+ 2665                   ;ret ;jmp goback
+ 2666                   ;
+ 2667 E4AA              FUNC19:
+ 2668                   ;delete a file
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  47
+BDOS    ASM
+
+ 2669 E4AA  CD E3F8     		CALL	RESELECT
+ 2670 E4AD  CD DF29     		CALL	DELETE
+ 2671 E4B0  C3 DE99     		JP	COPY_DIRLOC
+ 2672                   ;ret ;jmp goback
+ 2673                   ;
+ 2674 E4B3              FUNC20:
+ 2675                   ;read a file
+ 2676 E4B3  CD E3F8     		CALL	RESELECT
+ 2677 E4B6  C3 E179     		JP	SEQDISKREAD;
+ 2678                   ;jmp goback
+ 2679                   ;
+ 2680 E4B9              FUNC21:
+ 2681                   ;write a file
+ 2682 E4B9  CD E3F8     		CALL	RESELECT
+ 2683 E4BC  C3 E1B7     		JP	SEQDISKWRITE;
+ 2684                   ;jmp goback
+ 2685                   ;
+ 2686 E4BF              FUNC22:
+ 2687                   ;make a file
+ 2688 E4BF  CD DD13     		CALL	CLRMODNUM
+ 2689 E4C2  CD E3F8     		CALL	RESELECT
+ 2690 E4C5  C3 E0EA     		JP	MAKE
+ 2691                   ;ret ;jmp goback
+ 2692                   ;
+ 2693 E4C8              FUNC23:
+ 2694                   ;rename a file
+ 2695 E4C8  CD E3F8     		CALL	RESELECT
+ 2696 E4CB  CD DF9C     		CALL	RENAME
+ 2697 E4CE  C3 DE99     		JP	COPY_DIRLOC
+ 2698                   ;ret ;jmp goback
+ 2699                   ;
+ 2700 E4D1              FUNC24:
+ 2701                   ;return the login vector
+ 2702 E4D1  2A E596     		LD	HL,(DLOG)
+ 2703 E4D4  C3 E506     		JP	STHL_RET;
+ 2704                   ;	ret ;jmp goback
+ 2705                   ;
+ 2706 E4D7              FUNC25:
+ 2707                   ;return selected disk number
+ 2708 E4D7  3A E5C6     		LD	A,(olddsk)
+ 2709 E4DA  3C          		inc	a
+ 2710 E4DB  28 04       		jr	z, loc_E0FA
+ 2711 E4DD  3D          		dec	a
+ 2712 E4DE  C3 DAA5     		JP	STA_RET;
+ 2713                   ;	ret ;jmp goback
+ 2714 E4E1  3A DAF4     loc_E0FA:	ld	a, (curdsk)
+ 2715 E4E4  C3 DAA5     		jp	sta_ret
+ 2716                   
+ 2717                   ;
+ 2718 E4E7              FUNC26:
+ 2719                   ;set the subsequent dma address to info
+ 2720 E4E7  EB          		EX	DE,HL		;was lhld info
+ 2721 E4E8  22 E598     		LD	(DMAAD),HL	;dmaad = info
+ 2722 E4EB  C3 DD78     		JP	SETDATA		;to data dma address
+ 2723                   ;ret ;jmp goback
+ 2724                   ;
+ 2725 E4EE              FUNC27:
+ 2726                   ;return the login vector address
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  48
+BDOS    ASM
+
+ 2727 E4EE  2A E5A6     		LD	HL,(ALLOCA)
+ 2728 E4F1  C3 E506     		JP	STHL_RET;
+ 2729                   ;	ret ;jmp goback
+ 2730                   ;
+ 2731         DCCD      FUNC28		EQU	SET_RO;
+ 2732                   ;write protect current disk
+ 2733                   ;ret ;jmp goback
+ 2734                   ;
+ 2735 E4F4              FUNC29:
+ 2736                   ;return r/o bit vector
+ 2737 E4F4  2A E594     		LD	HL,(RODSK)
+ 2738 E4F7  C3 E506     		JP	STHL_RET;
+ 2739                   ;	ret ;jmp goback
+ 2740                   ;
+ 2741 E4FA              FUNC30:
+ 2742                   ;set file indicators
+ 2743 E4FA  CD E3F8     		CALL	RESELECT
+ 2744 E4FD  CD E00D     		CALL	INDICATORS
+ 2745 E500  C3 DE99     		JP	COPY_DIRLOC	;lret=dirloc
+ 2746                   ;ret ;jmp goback
+ 2747                   ;
+ 2748 E503              FUNC31:
+ 2749                   ;return address of disk parameter block
+ 2750 E503  2A E5A2     		LD	HL,(DPBADDR)
+ 2751 E506              STHL_RET:
+ 2752 E506  22 DAF7     		LD	(ARET),HL
+ 2753 E509  C9          		RET			;jmp goback
+ 2754 E50A              FUNC32:
+ 2755                   ;set user code
+ 2756 E50A  3A E5BD     		LD	A,(LINFO)
+ 2757 E50D  FE FF       		CP	0FFH
+ 2758 E50F  20 06       		Jr	NZ,SETUSRCODE
+ 2759                   ;interrogate user code instead
+ 2760 E511  3A DAF3     		LD	A,(USRCODE)
+ 2761 E514  C3 DAA5     		JP	STA_RET		;lret=usrcode
+ 2762                   ;		ret ;jmp goback
+ 2763 E517              SETUSRCODE:
+ 2764 E517  E6 1F       		AND	1FH
+ 2765 E519  32 DAF3     		LD	(USRCODE),A
+ 2766 E51C  C9          		RET	;jmp goback
+ 2767                   ;
+ 2768 E51D              FUNC33:
+ 2769                   ;random disk read operation
+ 2770 E51D  CD E3F8     		CALL	RESELECT
+ 2771 E520  C3 E339     		JP	RANDISKREAD	;to perform the disk read
+ 2772                   ;ret ;jmp goback
+ 2773                   ;
+ 2774 E523              FUNC34:
+ 2775                   ;random disk write operation
+ 2776 E523  CD E3F8     		CALL	RESELECT
+ 2777 E526  C3 E342     		JP	RANDISKWRITE	;to perform the disk write
+ 2778                   ;ret ;jmp goback
+ 2779                   ;
+ 2780 E529              FUNC35:
+ 2781                   ;return file size (0-65536)
+ 2782 E529  CD E3F8     		CALL	RESELECT
+ 2783 E52C  C3 E378     		JP	GETFILESIZE
+ 2784                   ;ret ;jmp goback
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  49
+BDOS    ASM
+
+ 2785                   ;
+ 2786         E3B1      FUNC36		EQU	SETRANDOM;
+ 2787                   ;set random record
+ 2788                   ;ret ;jmp goback
+ 2789 E52F              FUNC37:
+ 2790                   ;
+ 2791 E52F  2A DAF5     		LD	HL,(INFO)
+ 2792 E532  E5          		push	hl
+ 2793 E533  CD DCC2     		call	loc_D8DB
+ 2794 E536  28 04       		jr	z, loc_E155
+ 2795 E538  2F          		cpl
+ 2796 E539  32 DAF4     		ld	(curdsk), a
+ 2797 E53C  E1          loc_E155:	pop	hl
+ 2798 E53D  7D          		LD	A,L
+ 2799 E53E  2F          		CPL
+ 2800 E53F  5F          		LD	E,A
+ 2801 E540  7C          		LD	A,H
+ 2802 E541  2F          		CPL
+ 2803 E542  2A E596     		LD	HL,(DLOG)
+ 2804 E545  A4          		AND	H
+ 2805 E546  57          		LD	D,A
+ 2806 E547  7D          		LD	A,L
+ 2807 E548  A3          		AND	E
+ 2808 E549  5F          		LD	E,A
+ 2809 E54A  2A E594     		LD	HL,(RODSK)
+ 2810 E54D  EB          		EX	DE,HL
+ 2811 E54E  22 E596     		LD	(DLOG),HL
+ 2812 E551  7D          		LD	A,L
+ 2813 E552  A3          		AND	E
+ 2814 E553  6F          		LD	L,A
+ 2815 E554  7C          		LD	A,H
+ 2816 E555  A2          		AND	D
+ 2817 E556  67          		LD	H,A
+ 2818 E557  22 E594     		LD	(RODSK),HL
+ 2819 E55A  C9          		RET
+ 2820                   ;
+ 2821                   ;
+ 2822 E55B              GOBACK:
+ 2823                   ;arrive here at end of processing to return to user
+ 2824 E55B  3A E5C5     		LD	A,(RESEL)
+ 2825 E55E  B7          		OR	A
+ 2826 E55F  28 07       		Jr	Z,RETMON
+ 2827                   ;reselection may have taken place
+ 2828 E561  2A DAF5     		LD	HL,(INFO)
+ 2829 E564  3A E5C7     		LD	A,(FCBDSK)
+ 2830 E567  77          		LD	(HL),A		;fcb(0)=disk
+ 2831                   ;
+ 2832                   ;	return from the disk monitor
+ 2833 E568  FD E1       RETMON:		pop	iy
+ 2834 E56A  DD E1       		pop	ix
+ 2835 E56C  2A DAB1     		LD	HL,(ENTSP)
+ 2836 E56F  F9          		LD	SP,HL		;user stack restored
+ 2837 E570  2A DAF7     		LD	HL,(ARET)
+ 2838 E573  7D          		LD	A,L
+ 2839 E574  44          		LD	B,H		;BA = HL = aret
+ 2840 E575  C9          		RET
+ 2841         DAA8      FUNC38		EQU	FUNC_RET
+ 2842         DAA8      FUNC39		EQU	FUNC_RET
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  50
+BDOS    ASM
+
+ 2843 E576              FUNC40:
+ 2844                   ;random disk write with zero fill of unallocated block
+ 2845 E576  CD E3F8     		CALL	RESELECT
+ 2846 E579  3E 02       		LD	A,2
+ 2847 E57B  32 E5BC     		LD	(SEQIO),A
+ 2848 E57E  0E 00       		LD	C,FALSE_
+ 2849 E580  CD E2B4     		CALL	RSEEK1
+ 2850 E583  CC E1BC     		CALL	Z,DISKWRITE	;if seek successful
+ 2851 E586  C9          		RET
+ 2852                   ;
+ 2853 E587  FE FE FE FE 		ds 12,0FEh
+ 2854                   ;
+ 2855                   ;
+ 2856                   ;	data areas
+ 2857                   ;
+ 2858                   ;	initialized data
+ 2859 E593  E5          EFCB:		DB	EMPTY		;0e5=available dir entry
+ 2860 E594  0000        RODSK:		DW	0		;read only disk vector
+ 2861 E596  0000        DLOG:		DW	0		;logged-in disks
+ 2862 E598  0080        DMAAD:		DW	TBUFF		;initial dma address
+ 2863                   ;
+ 2864                   ;	curtrka - alloca are set upon disk select
+ 2865                   ;	(data must be adjacent, do not insert variables)
+ 2866                   ;	(address of translate vector, not used)
+ 2867 E59A  FF FF       CDRMAXA:	DS	WORD,0FFh	;pointer to cur dir max value
+ 2868 E59C  FF FF       CURTRKA:	DS	WORD,0FFh	;current track address
+ 2869 E59E  FF FF       CURRECA:	DS	WORD,0FFh	;current record address
+ 2870 E5A0  FF FF       BUFFA:		DS	WORD,0FFh	;pointer to directory dma address
+ 2871 E5A2  FF FF       DPBADDR:	DS	WORD,0FFh	;current disk parameter block address
+ 2872 E5A4  FF FF       CHECKA:		DS	WORD,0FFh	;current checksum vector address
+ 2873 E5A6  FF FF       ALLOCA:		DS	WORD,0FFh	;current allocation vector address
+ 2874         0008      ADDLIST		EQU	$-BUFFA		;address list size
+ 2875                   ;
+ 2876                   ;	sectpt - offset obtained from disk parm block at dpbaddr
+ 2877                   ;	(data must be adjacent, do not insert variables)
+ 2878 E5A8  FF FF       SECTPT:		DS	WORD,0FFh	;sectors per track
+ 2879 E5AA  FF          BLKSHF:		DS	BYTE,0FFh	;block shift factor
+ 2880 E5AB  FF          BLKMSK:		DS	BYTE,0FFh	;block mask
+ 2881 E5AC  FF          EXTMSK:		DS	BYTE,0FFh	;extent mask
+ 2882 E5AD  FF FF       MAXALL:		DS	WORD,0FFh	;maximum allocation number
+ 2883 E5AF  FF FF       DIRMAX:		DS	WORD,0FFh	;largest directory number
+ 2884 E5B1  FF FF       DIRBLK:		DS	WORD,0FFh	;reserved allocation bits for directory
+ 2885 E5B3  FF FF       CHKSIZ:		DS	WORD,0FFh	;size of checksum vector
+ 2886 E5B5  FF FF       OFFSET:		DS	WORD,0FFh	;offset tracks at beginning
+ 2887         000F      DPBLIST		EQU	$-SECTPT	;size of area
+ 2888                   ;
+ 2889                   ;	local variables
+ 2890 E5B7  FF FF       TRANV:		DS	WORD,0FFh	;address of translate vector
+ 2891 E5B9              FCB_COPIED:
+ 2892 E5B9  FF          		DS	BYTE,0FFh	;set TRUE_ if copy_fcb called
+ 2893 E5BA  FF          RMF:		DS	BYTE,0FFh	;read mode flag for open_reel
+ 2894 E5BB  FF          DIRLOC:		DS	BYTE,0FFh	;directory flag in rename, etc.
+ 2895 E5BC  FF          SEQIO:		DS	BYTE,0FFh	;1 if sequential i/o
+ 2896 E5BD  FF          LINFO:		DS	BYTE,0FFh	;low(info)
+ 2897 E5BE  FF          DMINX:		DS	BYTE,0FFh	;local for diskwrite
+ 2898 E5BF  FF          SEARCHL:	DS	BYTE,0FFh	;search length
+ 2899 E5C0  FF FF       SEARCHA:	DS	WORD,0FFh	;search address
+ 2900 E5C2  FF FF       TINFO:		DS	WORD,0FFh	;temp for info in "make"
+Z80ASM SuperFast Relocating Macro Assembler     	    Z80ASM 1.32 Page  51
+BDOS    ASM
+
+ 2901 E5C4  FF          SINGLE:		DS	BYTE,0FFh	;set TRUE_ if single byte allocation map
+ 2902 E5C5  FF          RESEL:		DS	BYTE,0FFh	;reselection flag
+ 2903 E5C6  FF          OLDDSK:		DS	BYTE,0FFh	;disk on entry to bdos
+ 2904 E5C7  FF          FCBDSK:		DS	BYTE,0FFh	;disk named in fcb
+ 2905 E5C8  FF          RCOUNT:		DS	BYTE,0FFh	;record count in current fcb
+ 2906 E5C9  FF          EXTVAL:		DS	BYTE,0FFh	;extent number and extmsk
+ 2907 E5CA  FF FF       VRECORD:	DS	WORD,0FFh	;current virtual record
+ 2908 E5CC  FF FF       ARECORD:	DS	WORD,0FFh	;current actual record
+ 2909 E5CE  FF FF       ARECORD1:	DS	WORD,0FFh	;current actual block# * blkmsk
+ 2910                   ;
+ 2911                   ;	local variables for directory access
+ 2912 E5D0  FF          DPTR:		DS	BYTE,0FFh	;directory pointer 0,1,2,3
+ 2913 E5D1  FF FF       DCNT:		DS	WORD,0FFh	;directory counter 0,1,...,dirmax
+ 2914 E5D3  FF FF       DREC:		DS	WORD,0FFh	;directory record 0,1,...,dirmax/4
+ 2915 E5D5  FF          DISKO:		db 0FFh			;initial disk on INIT, if <> FFh
+ 2916 E5D6  FE FE FE FE 		ds 9,0FEh
+ 2917 E5DF  32 30 2E 31 a20_11_88:	db "20.11.88"
+ 2918                   ;
+ 2919 E5E7  FF FF FF FF 		ds 25,0FFh              ;25 Byte Platz fuer Erweiterungen
+ 2920                   ;
+ 2921                   ;BIOS:		EQU	($ & 0FF00H)+100H	;next module
+ 2922         E600      BIOS:		EQU	$
+ 2923                   ;	bios access constants
+ 2924                   ;bios		equ	$+0E00h
+ 2925         E600      BOOTF		equ	BIOS+3*0	;cold boot function
+ 2926         E603      WBOOTF		equ	BIOS+3*1	;warm boot function
+ 2927         E606      CONSTF		equ	BIOS+3*2	;console status function
+ 2928         E609      CONINF		equ	BIOS+3*3	;console input function
+ 2929         E60C      CONOUTF		equ	BIOS+3*4	;console output function
+ 2930         E60F      LISTF		equ	BIOS+3*5	;list output function
+ 2931         E612      PUNCHF		equ	BIOS+3*6	;punch output function
+ 2932         E615      READERF		equ	BIOS+3*7	;reader input function
+ 2933         E618      HOMEF		equ	BIOS+3*8	;disk home function
+ 2934         E61B      SELDSKF		equ	BIOS+3*9	;select disk function
+ 2935         E61E      SETTRKF		equ	BIOS+3*10	;set track function
+ 2936         E621      SETSECF		equ	BIOS+3*11	;set sector function
+ 2937         E624      SETDMAF		equ	BIOS+3*12	;set dma function
+ 2938         E627      READF		equ	BIOS+3*13	;read disk function
+ 2939         E62A      WRITEF		equ	BIOS+3*14	;write disk function
+ 2940         E62D      LISTSTF		equ	BIOS+3*15	;list status function
+ 2941         E630      SECTRAN		equ	BIOS+3*16	;sector translate
+ 2942                   
+ 2943                   	END
+ 0 Error(s) Detected.
+ 3584 Absolute Bytes. 391 Symbols Detected.
+ 

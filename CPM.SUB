@@ -1,0 +1,5 @@
+Z80ASM CCP/F
+Z80ASM BDOS/F
+Z80ASM BIOS/F
+PIP CPM.BIN = CCP.COM, BDOS.COM, BIOS.COM
+
