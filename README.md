@@ -12,10 +12,10 @@ https://hc-ddr.hucki.net/wiki/doku.php/cpm/cpa
 Im BIOS wurden eine Reihe von Änderungen (Fehlerbehebung und neue Features) vorgenommen:
 - fehlerhafte Maskierung des USER-Bytes in WBOOT entfernt
 - GIDE-Laufwerke (C:, D:, E:) auf 8 MByte begrenzt
-- Consolenkommandos: Kursor-ON / Kursor-OFF
+- Konsolenkommandos: Kursor-ON / Kursor-OFF
 - Kursorblinken im Texteditor
 - Automatische Erkennung der RAM-Disk-Größe: 256 / 1024 / 2048 KByte
-- falsche I/O-Adresse von Modul-1 korrigiert
+- I/O-Adresse von Modul-1 korrigiert
 
 Das Assemblieren des Quellcodes erfolgt mit SUBMIT.COM: **SUBMIT CPM**
 
