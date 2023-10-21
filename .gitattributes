@@ -1,7 +1,5 @@
 *.ASM text eol=crlf
 *.LST text eol=crlf
 *.SUB text eol=crlf
-*.COM binary
-*.Z80 binary
-BIOS.ASM linguist-language=Assembly linguist-detectable
-BIOS.LST linguist-generated
+*.ASM linguist-language=Assembly linguist-detectable
+*.LST linguist-generated
