@@ -14,7 +14,7 @@ Im BIOS wurden eine Reihe von Änderungen (Fehlerbehebung und neue Features) vor
 - GIDE-Laufwerke (C:, D:, E:) auf 8 MByte begrenzt
 - Konsolenkommandos: Kursor-ON / Kursor-OFF
 - Kursorblinken im Texteditor
-- Automatische Erkennung der RAM-Disk-Größe: 256 / 1024 / 2048 KByte
+- Automatische Erkennung der RAM-Disk-Größe: 256 / 512 / 1024 / 2048 KByte
 - I/O-Adresse von Modul-1 korrigiert
 
 Das Assemblieren des Quellcodes erfolgt mit SUBMIT.COM: **SUBMIT CPM**

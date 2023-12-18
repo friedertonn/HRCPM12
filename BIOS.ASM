@@ -1,25 +1,26 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 19.08.2023  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 18.12.2023  *
 ; *                                                         *
-; *                                                  V.138  *
+; *                                                  V.139  *
 ; *                                                         *
 ; ***********************************************************
 ;
-; Korrekturen/Fehlerbehebungen am HRCPM12:
-; - alle nicht genutzten Programmteile (HRDOS?) entfernt
-; - LOAD(Turbo) entfernt
+; Korrekturen/Fehlerbehebungen:
+; - alle nicht genutzten Programmteile (HRDOS12) entfernt
+; - (Turbo-)LOAD entfernt
 ; - BWS(Farb)Init geaendert
-; - ^G BEEP + PUNCH:=V24out + LIST:=V24out zugefuegt
-; - keine Pruefsumme, kein Vergleichslesen v. RAM-Disk (entfernt)
+; - ^G BEEP + PUNCH:=V24out + LIST:=V24out hinzugefuegt
+; - keine Pruefsumme, kein Vergleichslesen der RAM-Disk (entfernt)
 ; - fehlerhafte Maskierung USER in WBOOT entfernt
 ; - Kursorblinken im Texteditor
 ; - Consolenkommandos Kursor-ON / Kursor-OFF
-; - RAM-Disk mit 64 REC/TRK, Systemspur 16k -> 8k, dadurch 8k mehr f. Daten
+; - RAM-Disk mit 64 REC/TRK, Systemspur auf 8K reduziert
 ; - GIDE-Laufwerke (C:, D:, E:) auf 8MB, da nicht alle BDOS'se mit mehr
 ;   als 16 Bit fuer REC-NR. zurechtkommen.
 ; - Formatierung RAM-Disk: letzter Sektor wurde nicht formatiert
 ; - falsche I/O-Adresse von Modul1
+; - ISR angepasst, damit HRCPM12 mit JKCEMU V0.9.8.3 funktioniert
 ;
 ; Neu hinzugekommen:
 ; - EXIT loescht CCPPUFLEN (V.132)
@@ -27,7 +28,7 @@
 ; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero) (V.133)
 ; - Tastaturpuffer von FFD0h -> FF00h , "d"-Befehl ueberschrieben (V.134)
 ; - nicht benutzte "Arbeitszellen" am Ende auskommentiert (V.135)
-; - automatische Erkennung der RAM-Disk Groesse 256k/1024k/2048k (V.136)
+; - automatische Erkennung der RAM-Disk 256k/512k/1024k/2048k (V.136)
 ;
 ;
         .CREF
@@ -306,6 +307,17 @@ DPB6:   DEFW 80           ;80 Sectoren/Track
         DEFB 50H,1,43H,0FFH
         DEFB 0E1H,33H,0FFH
 ;
+;RAM-Disk 512 KByte
+DP512:  DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
+        DEFB 4            ;Blockgroesse = 2 Kbyte
+        DEFB 15
+        DEFB 1            ;8-Bit Blockadressen im FCB/DIR, da weniger als 255 Bloecke
+        DEFW 251          ;252 * 2 Kbyte-Bloecke  -> 512k-8k(System)=504k(CP/M) ( - 2k(DIR) -> 502k (NETTO f. Daten))
+        DEFW 63           ;64 DIR - Eintaege
+        DEFW 080H         ;1 DIR-Block
+        DEFW 0            ;weil nichtwechselbares Medium
+        DEFW 1            ;8 Kbyte System / Track-Offset
+;
 ;RAM-Disk 1024 KByte
 DP1024: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
@@ -331,7 +343,7 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
         DEFM "11.01.89 FA-MODE "
-        DEFM "vom 09.08.2023 V.138"
+        DEFM "vom 18.12.2023 V.139"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -344,9 +356,11 @@ TXT01:  DEFB 0CH
         DEFB 0
 TXT01A: DEFM "256k"
         DEFB 0
-TXT01B: DEFM "1024k"
+TXT01B: DEFM "512k"
         DEFB 0
-TXT01C: DEFM "2048k"
+TXT01C: DEFM "1024k"
+        DEFB 0
+TXT01D: DEFM "2048k"
         DEFB 0
 TXT02:  DEFM " --> Format A:(J)?"
         DEFB 0
@@ -371,7 +385,7 @@ BOOT:   DI
         LD   (DF51A),A
         LD   (IOBYTE),A
         LD   (LWBYTE),A
-        LD   (ZEIPUF),A
+        LD   (ZEIPUF),A   ;Init. Tastaturpuffer
         CALL BOOT1        ;CP/M "Grundseite" INIT
 ;
         LD   A,03H        ;CTC init. + Interrupt abgeschaltet
@@ -400,22 +414,23 @@ BOOT:   DI
 ;
         LD   HL,ISRTAS    ;1. Einsprungpunkt PIO-Interrupt --> Taste in Tastaturpuffer schreiben
         LD   (DFF88),HL   ;auf 0FF88h eintragen
-        LD   HL,ISRPA     ;2. Einsprungpunkt PIO-Interrupt --> weitere PIO_1A-Interrupts "ignorieren"
-        LD   (DFF8A),HL   ;auf 0FF8Ah eintragen
         LD   BC,0506H     ;5 Bytes auf Controlkanal PIO1 A
-        LD   HL,PIO1TAB
+        LD   HL,PIOTAB
         OTIR              ;PIO1_A Init. fuer 1. Einsprungpunkt
 ;
         LD   HL,TXT01     ;Begruessungstext
         CALL OUTTXT
 ;
         CALL RDTEST       ;Kapazitaet der RAM-Disk bestimmen
-        LD   HL,RDSIZE    ;RD-Size: 0=256K 1=1024K 2=2048K
+        LD   HL,RDSIZE    ;RD-Size: 0=256K 1=512K 2=1024K 3=2048K
         LD   A,(HL)
         LD   HL,DP2048    ;DPB 2048K RAM-Disk
-        CP   2
+        CP   3
         JR   Z,BOOT2
         LD   HL,DP1024    ;DPB 1024K RAM-Disk
+        CP   2
+        JR   Z,BOOT2
+        LD   HL,DP512     ;DPB 512K RAM-Disk
         CP   1
         JR   Z,BOOT2
         JR   BOOT3        ;256K RAM-Disk, nichts kopieren
@@ -423,13 +438,16 @@ BOOT:   DI
 BOOT2:  LD   DE,DPB0
         LD   BC,15
         LDIR
-BOOT3:  LD   HL,TXT01A    ;256k
-        CP   0
+BOOT3:  LD   HL,TXT01D    ;2048k
+        CP   3
         JR   Z,BOOT4
-        LD   HL,TXT01B    ;1024k
+        LD   HL,TXT01C    ;1024k
+        CP   2
+        JR   Z,BOOT4
+        LD   HL,TXT01B    ;512k
         CP   1
         JR   Z,BOOT4
-        LD   HL,TXT01C    ;2048k
+        LD   HL,TXT01A    ;256k
 BOOT4:  CALL OUTTXT
         LD   HL,TXT02     ;Formatieren? (J)
         CALL OUTTXT
@@ -438,6 +456,10 @@ BOOT4:  CALL OUTTXT
         RES  5,A          ;Grossbuchstaben
         CP   4AH          ;J --> RAM-Disk formatieren
         CALL Z,RDFORM
+        LD   HL,8000H     ;POWER.COM nach 100h kopieren
+        LD   DE,0100H
+        LD   BC,4000H
+        LDIR
         JR   WBOOT1
 ;
 ;*******************************   WBOOT   *****************************
@@ -557,9 +579,6 @@ PRELL1: IN   A,(P04)
 ;
         CP   80H
         JR   Z,ISREND     ;das war eine NULL-Eingabe
-        LD   HL,PIO2TAB
-        LD   BC,0206H     ;PIO_A-Control, 2 Bytes
-        OTIR              ;weitere Interrupts "ignorieren"
 ;
         LD   C,A
         LD   HL,ZEIPUF
@@ -567,8 +586,9 @@ PRELL1: IN   A,(P04)
         INC  A
         CP   1FH          ;Puffer voll?
         JR   Z,ISREND
-        LD   (HL),A       ;Anzahl der Zeichen im Puffer
+        LD   (HL),A       ;Anzahl der Zeichen rueckschreiben
         PUSH BC
+        LD   B,0
         LD   C,A
         ADD  HL,BC        ;HL = Position im Zeichenpuffer
         POP  BC
@@ -587,11 +607,16 @@ BEEP2:  DEC  A
         AND  0FEH
         OUT  (P05),A
 ;
-        LD   BC,0200H     ;Warteschleife - Entprellung
+        LD   BC,0200H     ;Tastaturentprellung
 PRELL2: DEC  BC
         LD   A,B
         OR   C
         JR   NZ,PRELL2
+;
+        LD   A,0B7H       ;weitere Interrupts loeschen
+        OUT  (P06),A
+        LD   A,7FH
+        OUT  (P06),A
 ;
 ISREND: POP  HL
         POP  BC
@@ -599,29 +624,12 @@ ISREND: POP  HL
         EI
         RETI
 ;
-;
-;2. Interrupt-Einsprung fuer PIO1 Kanal A - Neuinitialisierung der PIO
-;
-ISRPA:  DI
-        PUSH AF
-        PUSH BC
-        PUSH HL
-        LD   HL,PIO1TAB
-        LD   BC,0506H     ;5 Bytes f. PIO_A-Control
-        OTIR
-        JR   ISREND
-;
-PIO1TAB: DEFB 88H,0CFH,0FFH,0B7H,7FH  ;PIO 1A: Init.-Tabelle
+PIOTAB: DEFB 88H,0CFH,0FFH,0B7H,7FH  ;PIO 1A: Init.-Tabelle
 ;  88H --> NWT Interruptvektor --> 0FF88H
 ; 0CFH --> "Mode 3" + "Set Mode" (kein Handshaking, next Byte = I/O-Zuordnung)
 ; 0FFH --> PA0 bis PA7 sind Eingaenge
 ; 0B7H --> Setting Interrupt Control Word --> mit nachfolgender Maskierung
-;  7FH --> Bit7=Low --> nur PA7 erzeugt Interrupts
-;
-PIO2TAB: DEFB 8AH,87H     ;PIO 1A: "Ignorieren" weiterer Interrupts
-;  8AH --> "Verbiegen" NWT Interruptvektor --> 0FF8A
-;  87H --> Setting Interrupt Control Word --> ohne nachfolgende Maskierung
-;
+;  7FH --> Bit7=L --> nur PA7 erzeugt Interrupts
 ;
 OUTTXT: PUSH BC
         PUSH AF
@@ -1327,14 +1335,13 @@ TXTRDE: DEFM "RFL ERROR!"
 ;
 RDTEST: XOR  A            ;Kapazitaet der RAM-Disk testen
         OUT  (PE0+6),A    ;H-Adresse ruecksetzen
-        LD   HL,RDMERK    ;Merkzellen RAM
-        LD   B,3          ;3 Durchlaeufe
+        LD   HL,RDMERK    ;Merkzellen im RAM
+        LD   B,4          ;4 Durchlaeufe
         LD   C,PE0        ;Test erfolgt in der 1. RAM-Bank
-        LD   D,0          ;Startwert Extended-Adresse
+        LD   D,4          ;Startwert Extended-Adresse
 RDTST1: XOR  A
         OUT  (PE0+7),A    ;L-Adresse ruecksetzen
         LD   A,D
-        SLA  A            ;Extended-Adresse *= 2
         OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
         IN   A,(C)
         LD   (HL),A       ;Daten aus der RAM-Disk sichern
@@ -1343,52 +1350,52 @@ RDTST1: XOR  A
         LD   A,D
         OUT  (C),A        ;Testwert in die RAM-Disk schreiben
         INC  HL           ;Merkzelle++
-        INC  D            ;Extended-Adresse++ / Testwert++
+        SRL  D            ;0 --> D7 --> D0 --> CY
         DJNZ RDTST1
 ;
 ;Tabelle der Test-Werte (mit *...* sind die zu testenden Werte):
 ;
-;     RAM-Disk-Size =     256K  1024K  2048K
-;Extended-Adresse=0000B    02H    02H   *00H*
-;Extended-Adresse=0010B    02H   *01H*   01H
-;Extended-Adresse=0100B   *02H*   02H    02H
+;           RAM-Disk-Size =   256K   512K  1024K  2048K
+;Extended-Adresse=00000100B    0      0      0     *4*
+;Extended-Adresse=00000010B    0      0     *2*     2
+;Extended-Adresse=00000001B    0     *1*     1      1
+;Extended-Adresse=00000000B   *0*     0      0      0
 ;
-        LD   B,3          ;3 Durchlaeufe
-        LD   D,0          ;Startwert Extended-Adresse
+        LD   B,4          ;4 Durchlaeufe
+        LD   D,4          ;Startwert Extended-Adresse
 RDTST2: XOR  A
         OUT  (PE0+7),A    ;L-Adresse ruecksetzen
         LD   A,D
-        SLA  A            ;Extended-Adresse *= 2
         OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
         IN   A,(C)
         CP   D
-        JR   Z,RDTST3     ;2048K (B=3), 1024K (B=2), 256K (B=1)
-        INC  D            ;Extended-Adresse++ / Testwert++
+        JR   Z,RDTST3     ;2048(B=4),1024(B=3),512(B=2),256(B=1)
+        SRL  D            ;0 --> D7 --> D0 --> CY
         DJNZ RDTST2
         JP   RDERRO       ;Fehler: hier stimmt was nicht!
 ;
 RDTST3: LD   HL,RDSIZE
         DEC  B
-        LD   (HL),B       ;RD-Size: 0=256K 1=1024K 2=2048K
+        LD   (HL),B       ;RD-Size: 0=256K 1=512K 2=1024K 3=2048K
 ;
-        LD   HL,RDMERK    ;Merkzellen RAM (in die RD zurueck)
-        INC  B            ;1-3 Durchlaeufe, je nach RDSIZE
+        LD   HL,RDMERK+3  ;Merkzellen RAM (in die RD zurueck)
+        INC  B            ;1 bis 4 Durchlaeufe, je nach RDSIZE
         LD   C,PE0        ;1. RAM-Bank
-        LD   D,0          ;Startwert Extended-Adresse
+        LD   D,1          ;Startwert Ext.-Adr. (1 Bit n. rechts)
 RDTST4: XOR  A
         OUT  (PE0+7),A    ;L-Adresse ruecksetzen
         LD   A,D
-        SLA  A            ;Extended-Adresse *= 2
+        SRL  A            ;0 --> A7 --> A0 --> CY
         OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
         LD   A,(HL)
         OUT  (C),A        ;urspruengliche Daten zurueckschreiben
-        INC  HL
-        INC  D
+        DEC  HL
+        SLA  D            ;CY <-- D7 <-- D0 <-- 0
         DJNZ RDTST4       ;WICHTIG: nicht mehr als notwendig
         RET               ;in die RAM-Disk zurückschreiben!!
 ;
-RDMERK: DEFS 3,0          ;3 Merkzellen fuer den RAM
-RDSIZE: DEFB 0            ;RD-Size: 0=256K 1=1024K 2=2048K
+RDMERK: DEFS 4,0          ;4 Merkzellen fuer den RAM
+RDSIZE: DEFB 0            ;RD-Size: 0=256K 1=512K 2=1024K 3=2048K
 ;
 RDFORM: LD   HL,TXTRDI    ;Formatierungstext...
         CALL OUTTXT
@@ -1418,15 +1425,18 @@ RDFORM: LD   HL,TXTRDI    ;Formatierungstext...
         LDIR              ;0D3H,0E3H von 0C600H bis 0C7FFH
         LD   (HL),0C9H    ;RET auf 0C800H
 ;
-        LD   HL,RDSIZE    ;RD-Size: 0=256K 1=1024K 2=2048K
+        LD   HL,RDSIZE    ;RD-Size: 0=256K 1=512K 2=1024K 3=2048K
         LD   A,(HL)
         CP   0
-        JR   Z,RDFOR1
+        JR   Z,RDFOR1     ;RD 256K
+        CP   1
+        JR   Z,RDFOR1     ;RD 512K
+        DEC  A
         SLA  A            ;A *= 2
         SLA  A            ;A *= 2
         DEC  A
 RDFOR1: LD   D,A
-        INC  D            ;neue RD-Size: 1=256K 4=1024K 8=2048K
+        INC  D            ;D ==> 1=256K 2=512K 4=1024K 8=2048K
         XOR  A
         OUT  (PE0+7),A    ;L-Adresse setzen
         OUT  (PE0+5),A    ;Extended-Adresse
@@ -1435,7 +1445,7 @@ RDFOR1: LD   D,A
         LD   C,PE0+6
 RDFOR2: OUT  (C),B        ;H-Adresse setzen
         LD   A,0E5H       ;RD wird mit 0E5H formatiert
-        CALL HPRDSK       ;Hilfsprogramm Format RAM-Disk
+        CALL HPRDSK       ;Hilfsprog. Format RAM-Disk auf C000H
         DJNZ RDFOR2       ;fuer alle H-Adressen (256 Durchl.)
         INC  E
         LD   A,E
@@ -2053,8 +2063,8 @@ STZ02:  DEFB 0            ;Merkzelle fuer 2. ESC-Steuerzeichen
 ;
 CHAR:   DEFB 0            ;Merkzelle Zeichen <> Cursor  F4D2h
 ;
-SPCIN:  DEFW 0            ;F4D8
-SPCOUT: DEFW 0
+SPCIN:  DEFW 0            ;Merkzelle Stackpointer waehrend CONIN
+SPCOUT: DEFW 0            ;Merkzelle Stackpointer waehrend CONOUT
 OLDNMI: DEFW 0            ;2 Bytes fuer alten NMI
 ;
 DF4E2:  NOP
@@ -2076,7 +2086,7 @@ CTAB:   NOP               ;FDC Befehlsbyte
 DF4F0:  NOP
 DF4F7:  NOP
 DF4F8:  NOP
-CTCCNT: NOP               ;CTC-Counter - Zusatzzaehler fuer CTC-Interrupt
+CTCCNT: DEFB 0            ;CTC-Counter - Zusatzzaehler fuer CTC-Interrupt
 LATPU:  NOP               ;Latch fuer den Floppy-Controler
 ;
 ;hier beginnt eine Bytefolge fuer Read/Write Operationen
