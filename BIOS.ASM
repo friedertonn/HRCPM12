@@ -1,6 +1,6 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 18.12.2023  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 21.12.2023  *
 ; *                                                         *
 ; *                                                  V.139  *
 ; *                                                         *
@@ -183,9 +183,10 @@ DPH6:   DEFW 0            ;Floppy G:
 ;
 ; https://hc-ddr.hucki.net/wiki/doku.php/cpm/write_a_bios/teil_1
 ;
-        DEFW RDSKRW       ;Routine zum Lesen/Schreiben der RAM-Disk
+;RAM-Disk 256 KByte  LW A:
 ;
-;RAM-Disk 256 KByte
+        DEFW RWRDSK       ;Routine zum Lesen/Schreiben der RAM-Disk
+;
 DPB0:   DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFB 3            ;Blockgroesse = 1 Kbyte
         DEFB 7
@@ -196,9 +197,10 @@ DPB0:   DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFW 0            ;weil nichtwechselbares Medium
         DEFW 1            ;8 Kbyte System / Track-Offset
 ;
-        DEFW LF019        ;? Blocking / Deblocking
+;Floppy 780 KByte  LW B:
 ;
-;Floppy 780 KByte
+        DEFW RWFLO        ;Routine zum Lesen/Schreiben der Floppy-Disk
+;
 DPB1:   DEFW 80           ;80 Sectoren/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
         DEFB 15
@@ -213,9 +215,10 @@ DPB1:   DEFW 80           ;80 Sectoren/Track
         DEFB 50H,0,43H,0FFH
         DEFB 0E1H,33H,0FFH
 ;
-        DEFW LF015        ;? Blocking / Deblocking
+;GIDE 8 MByte  LW C:
 ;
-;GIDE 8 MByte
+        DEFW RWGIDE       ;Routine zum Lesen/Schreiben des GIDE-LW
+;
 DPB2:   DEFW 2048         ;2048 Records/Track = 256k/Trk
         DEFB 5
         DEFB 31           ;4k Bloecke
@@ -233,9 +236,10 @@ DPB2:   DEFW 2048         ;2048 Records/Track = 256k/Trk
         DEFB 10H          ;16 Koepfe HDD
         DEFB 20H          ;32 Sektoren/Spur HDD
 ;
-        DEFW LF015        ;? Blocking / Deblocking
+;GIDE 8 MByte  LW D:
 ;
-;GIDE 8 MByte
+        DEFW RWGIDE       ;Routine zum Lesen/Schreiben des GIDE-LW
+;
 DPB3:   DEFW 2048         ;2048 Records/Track = 256k/Trk
         DEFB 6
         DEFB 63           ;8k Bloecke
@@ -253,9 +257,10 @@ DPB3:   DEFW 2048         ;2048 Records/Track = 256k/Trk
         DEFB 10H          ;16 Koepfe HDD
         DEFB 20H          ;32 Sektoren/Spur HDD
 ;
-        DEFW LF015        ;? Blocking / Deblocking
+;GIDE 8 MByte  LW E:
 ;
-;GIDE 8 MByte
+        DEFW RWGIDE       ;Routine zum Lesen/Schreiben des GIDE-LW
+;
 DPB4:   DEFW 2048         ;2048 Records/Track = 256k/Trk
         DEFB 6
         DEFB 63           ;8k Bloecke
@@ -273,9 +278,10 @@ DPB4:   DEFW 2048         ;2048 Records/Track = 256k/Trk
         DEFB 10H          ;16 Koepfe HDD
         DEFB 20H          ;32 Sektoren/Spur HDD
 ;
-        DEFW LF019        ;? Blocking / Deblocking
+;Floppy 640 KByte  LW F:
 ;
-;Floppy 640 KByte
+        DEFW RWFLO        ;Routine zum Lesen/Schreiben der Floppy-Disk
+;
 DPB5:   DEFW 64           ;64 Sectoren/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
         DEFB 15
@@ -290,9 +296,10 @@ DPB5:   DEFW 64           ;64 Sectoren/Track
         DEFB 50H,0,43H,0FFH
         DEFB 0E1H,33H,0FFH
 ;
-        DEFW LF019        ;? Blocking / Deblocking
+;Floppy 800 KByte  LW G:
 ;
-;Floppy 800 KByte
+        DEFW RWFLO        ;Routine zum Lesen/Schreiben der Floppy-Disk
+;
 DPB6:   DEFW 80           ;80 Sectoren/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
         DEFB 15
@@ -307,7 +314,7 @@ DPB6:   DEFW 80           ;80 Sectoren/Track
         DEFB 50H,1,43H,0FFH
         DEFB 0E1H,33H,0FFH
 ;
-;RAM-Disk 512 KByte
+;RAM-Disk 512 KByte  LW A:
 DP512:  DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
         DEFB 15
@@ -318,7 +325,7 @@ DP512:  DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFW 0            ;weil nichtwechselbares Medium
         DEFW 1            ;8 Kbyte System / Track-Offset
 ;
-;RAM-Disk 1024 KByte
+;RAM-Disk 1024 KByte  LW A:
 DP1024: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
         DEFB 15
@@ -329,7 +336,7 @@ DP1024: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFW 0            ;weil nichtwechselbares Medium
         DEFW 1            ;8 Kbyte System / Track-Offset
 ;
-;RAM-Disk 2048 KByte
+;RAM-Disk 2048 KByte  LW A:
 DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
         DEFB 4            ;Blockgroesse = 2 Kbyte
         DEFB 15
@@ -665,7 +672,7 @@ CONIN1: XOR  A
         DI
         LD   HL,(ZEIPUF)  ;L = Anz. der Zeichen, H = 1. Zeichen
         OR   L
-        JR   NZ,CONIN4    ;Zeichen im Tastaturpuffer vorhanden
+        JR   NZ,CONIN3    ;Zeichen im Tastaturpuffer vorhanden
         EI
         DJNZ CONIN1       ;256*LOOP: warte auf ein Zeichen
         LD   A,(CUFLAG)
@@ -677,13 +684,13 @@ CONIN1: XOR  A
         INC  C
         BIT  7,C          ;hier wird die Cursor-Blinkfrequenz festgelegt
         LD   A,(CHAR)     ;bisheriges Zeichen auf der Kursorposition
-        JR   Z,CONIN3
+        JR   Z,CONIN2
         LD   A,CUZEI      ;Kursor = 0FH
-CONIN3: LD   (HL),A       ;"Kursor-Blinken" - Bildschirm-Ausgabe
+CONIN2: LD   (HL),A       ;"Kursor-Blinken" - Bildschirm-Ausgabe
         CALL CPMMOD       ;CP/M Mode
         JR   CONIN1
 ;
-CONIN4: DEC  A            ;DEC Anzahl_der_Zeichen_im_Tastaturpuffer
+CONIN3: DEC  A            ;DEC Anzahl_der_Zeichen_im_Tastaturpuffer
         LD   (ZEIPUF),A
         LD   A,H          ;1. Zeichen aus dem Tastaturpuffer --> A
         LD   HL,ZEIPUF+2
@@ -704,13 +711,13 @@ LIST:   DI
         PUSH AF      
         LD   A,C
         CP   0AH  
-        JR   Z,LEND1  
+        JR   Z,LIST1  
         CALL MV24A        ;MONI V24 Ausgabe Akku
         CP   0DH     
-        JR   NZ,LEND1 
+        JR   NZ,LIST1 
         LD   A,0AH   
         CALL MV24A        ;MONI V24 Ausgabe Akku
-LEND1:  POP  AF      
+LIST1:  POP  AF      
         CALL CPMMOD
         EI
         RET
@@ -1253,35 +1260,35 @@ READ:   LD   C,02H
         LD   A,04H
         DEFB 21H          ;LD HL,063EH mit nxt. Befehl!!!
 WRITE:  LD   A,06H        ;DUMMY fuer READ
-        LD   (RWBYTE),A   ;hier geht es fuer READ weiter!
+        LD   (RWBYTE),A   ;RWBYTE: 04 = Lesen; 06 = Schreiben
         LD   A,C
         LD   (DF51E),A
-        LD   HL,LEDEC
+        LD   HL,RWEND
         PUSH HL
         LD   HL,(DPH)
         LD   DE,000AH
         ADD  HL,DE
-        LD   A,(HL)
+        LD   A,(HL)       ;NWT vom DPB
         INC  HL
-        LD   H,(HL)
+        LD   H,(HL)       ;HWT vom DPB
         LD   L,A
         DEC  HL
-        LD   A,(HL)
+        LD   A,(HL)       ;HWT der R/W-Funktion
         DEC  HL
-        LD   L,(HL)
+        LD   L,(HL)       ;NWT der R/W-Funktion
         LD   H,A
-        PUSH HL
-        LD   HL,RWBYTE    ;HL -> Bytefolge fuer R/W
-        RET
+        PUSH HL           ;Adresse der R/W-Funktion
+        LD   HL,RWBYTE    ;HL -> R/W-Byte
+        RET               ;JP R/W-Funktion
 ;
-LEDEC:  OR   A
+RWEND:  OR   A
         RET  Z
-        LD   A,01H
+        LD   A,01H        ;Fehler
         RET
 ;
 ;************************  RAM-Disk   ******************************
 ;
-RDSKRW: LD   C,(HL)       ;RWBYTE: 04 = Lesen; 06 = Schreiben 
+RWRDSK: LD   C,(HL)       ;RWBYTE: 04 = Lesen; 06 = Schreiben 
         INC  HL           ;DRIVE wird uebersprungen
         INC  HL
         LD   A,(HL)       ;TRACK NWT
@@ -1536,13 +1543,13 @@ LOAD:   RET
 ;******************************   Ende LOAD  *****************
 ;
 LEFFA:  LD   HL,(DPH)     ;zugeordneter DPH --> HL
-        LD   (DF515),HL
+        LD   (DPH3M),HL   ;Merkzelle DPH
 LF000:  LD   L,0FH
 LF002:  PUSH DE
         LD   DE,000AH
         LD   H,D
         PUSH HL
-        LD   HL,(DF515)
+        LD   HL,(DPH3M)   ;Merkzelle DPH
         ADD  HL,DE
         LD   E,(HL)
         INC  HL
@@ -1553,11 +1560,15 @@ LF002:  PUSH DE
         LD   A,(HL)
         OR   A
         RET
-;Ansprung unklar
-LF015:  INC  HL
+;
+;
+;       READ/WRITE Routinen GIDE + Floppy-Disk
+;       --------------------------------------
+;
+RWGIDE: INC  HL
         SET  7,(HL)
         DEC  HL
-LF019:  XOR  A
+RWFLO:  XOR  A
         LD   (DF51C),A
         CALL LF024
         LD   A,(DF51C)
@@ -1585,14 +1596,14 @@ LF03D:  SRL  H
         OR   A
         JR   Z,LF075
         LD   A,(DRIVE)
-        LD   HL,DF505
+        LD   HL,DRV2
         CP   (HL)
         JR   NZ,LF06E
-        LD   HL,(DF506)
+        LD   HL,(TRK2)
         LD   DE,(TRACK)
         SBC  HL,DE
         JR   NZ,LF06E
-        LD   HL,(DF508)
+        LD   HL,(SEC2)
         LD   DE,(DF518)
         SBC  HL,DE
         JR   Z,LF08D
@@ -1600,11 +1611,11 @@ LF06E:  LD   A,(DF51B)
         OR   A
         CALL NZ,LF0CE
 LF075:  LD   HL,DRIVE
-        LD   DE,DF505
-        LD   BC,0009H
+        LD   DE,DRV2
+        LD   BC,9         ;9 Bytes kopieren
         LDIR
         LD   HL,(DF518)
-        LD   (DF508),HL
+        LD   (SEC2),HL
         CALL LF0D1
         XOR  A
         LD   (DF51B),A
@@ -1646,23 +1657,23 @@ LF0C9:  XOR  A
 LF0CE:  LD   A,06H
         DEFB 21H          ;LD HL,043EH -> 21 3E 04
 LF0D1:  LD   A,04H  
-        LD   (DF517),A
+        LD   (MERKRW),A
         LD   HL,DISKP
-        LD   (DF50A),HL
-        LD   HL,DF505
+        LD   (DMA2),HL
+        LD   HL,DRV2
         JR   LF0EA
 ;
 LF0E1:  LD   A,(RWBYTE)
-        LD   (DF517),A
+        LD   (MERKRW),A
         LD   HL,DRIVE
-LF0EA:  LD   DE,DF50E
-        LD   BC,0009H
+LF0EA:  LD   DE,DRV3
+        LD   BC,9         ;9 Bytes kopieren
         LDIR
-        LD   A,(DF50E)
+        LD   A,(DRV3)
         RLA
         JP   C,GIDERW     ;GIDE
-        LD   A,(DF510)
-        LD   HL,DF512
+        LD   A,(TRK3+1)
+        LD   HL,SEC3+1
         OR   (HL)
         JP   NZ,LF1C1
         CALL LF000
@@ -1676,7 +1687,7 @@ LF110:  LD   (DF4EB),A
         INC  HL
         LD   A,(HL)
         LD   (DF4E9),A
-        LD   A,(DF511)
+        LD   A,(SEC3)
         CP   (HL)
         JR   C,LF123
         SUB  (HL)
@@ -1687,7 +1698,7 @@ LF123:  INC  A
         LD   A,(HL)
         LD   (DF4EA),A
         INC  HL
-        LD   A,(DF50F)
+        LD   A,(TRK3)
         CP   (HL)
         JR   C,LF137
         SUB  (HL)
@@ -1700,7 +1711,7 @@ LF137:  LD   (DF4E5),A
         LD   A,B
         LD   (DF4E6),A
         INC  HL
-        LD   A,(DF517)
+        LD   A,(MERKRW)
         LD   D,05H
         CP   06H
         JR   Z,LF150
@@ -1744,7 +1755,7 @@ LF18D:  ADD  HL,HL
         INC  H
         INC  L
         PUSH HL
-        LD   HL,(DF513)
+        LD   HL,(DMA3)
         PUSH HL
         LD   A,(DF4E2)
         LD   C,A
@@ -1774,19 +1785,19 @@ LF1C3:  LD   (DF51C),A
 ;
 LF1C8:  LD   B,07H
         LD   HL,DF4F0
-LF1CD:  CALL LF24B
+LF1CD:  CALL RBYTE
         LD   (HL),A
         INC  HL
         DJNZ LF1CD
         RET
 ;
-LF1D5:  LD   BC,0207H
+LF1D5:  LD   BC,0207H     ;Spur 0 einstellen
         CALL LF227
-        CALL LF207
+        CALL SENSE
         RET  Z
         LD   BC,0207H
         CALL LF227
-        JR   LF207
+        JR   SENSE
 ;
 LF1E7:  LD   A,(DF4E5)
         LD   (DF4F7),A
@@ -1801,19 +1812,19 @@ LF1E7:  LD   A,(DF4E5)
 LF1FE:  CALL LF227
         LD   A,(DF4F7)
         LD   (DF4E5),A
-LF207:  LD   BC,0108H
+SENSE:  LD   BC,0108H
         CALL LF227
-        CALL LF24B
+        CALL RBYTE
         LD   B,A
         LD   (DF4F0),A
         CP   80H
-        CALL NZ,LF24B
-        BIT  5,B
-        JR   Z,LF207
+        CALL NZ,RBYTE     ;PCN holen
+        BIT  5,B          ;SEEK Ende?
+        JR   Z,SENSE
         LD   A,B
         AND  0F0H
         CP   0C0H
-        JR   Z,LF207
+        JR   Z,SENSE
         XOR  20H
         RET
 ;
@@ -1839,19 +1850,19 @@ LF247:  LD   B,00H
         POP  DE
         RET
 ;
-LF24B:  PUSH HL
+RBYTE:  PUSH HL           ;1 Byte lesen
         LD   HL,1FFFH
-LF24F:  LD   A,L
+RBYTE1: LD   A,L
         OR   H
         LD   A,0C0H
-        JR   Z,LF260      ;Abbruch nach 8192 Versuchen
+        JR   Z,RBYTE2     ;Abbruch nach 8192 Versuchen
         IN   A,(CFDC)     ;Lese Hauptstatusregister
         AND  0C0H
         CP   0C0H         ;FDC bereit zum Lesen?
         DEC  HL
-        JR   NZ,LF24F     ;noch nicht bereit
+        JR   NZ,RBYTE1    ;noch nicht bereit
         IN   A,(DFDC)     ;1 Byte vom FDC lesen --> A
-LF260:  POP  HL
+RBYTE2: POP  HL
         RET
 ;
 ;
@@ -1923,7 +1934,7 @@ LF2C9:  PUSH BC
         PUSH HL
         LD   BC,0204H
         CALL LF22C
-        CALL LF24B
+        CALL RBYTE
         POP  HL
         POP  BC
         BIT  5,A
@@ -1944,7 +1955,7 @@ ISRCTC: DI                ;DI hat gefehlt, wurde ergaenzt
         AND  A
         JR   Z,ISRCTE     ;bei "0", die Fkt. beenden
         ;Beim Start von HRCPM wird CNTCNT per Interrupt von 255 auf 0 heruntergezaehlt.
-        ;Das sieht nach einer verzoegerten Steuerung von LATPU und LATCH aus.
+        ;--> verzoegerte Steuerung von LATPU und LATCH
         DEC  A
         LD   (CTCCNT),A
         JR   NZ,ISRCTE
@@ -1967,7 +1978,7 @@ GIDERW: IN   A,(P8F)      ;Command / Status
         LD   L,19H
         CALL LF002
         LD   C,A
-        LD   HL,(DF511)
+        LD   HL,(SEC3)
         INC  HL
         XOR  A
         LD   B,A
@@ -1989,7 +2000,7 @@ LF31F:  ADD  HL,BC
         LD   E,(HL)
         INC  HL
         LD   D,(HL)
-        LD   HL,(DF50F)
+        LD   HL,(TRK3)
         ADD  HL,DE
         LD   A,L
         OUT  (P8C),A      ;Cylinder Low
@@ -1997,7 +2008,7 @@ LF31F:  ADD  HL,BC
         OUT  (P8D),A      ;Cylinder High
         LD   A,01H
         OUT  (P8A),A      ;Sector Count
-        LD   A,(DF517)
+        LD   A,(MERKRW)
         CP   06H
         JR   Z,LF35D      ;6 = schreiben
 ;
@@ -2008,7 +2019,7 @@ LF31F:  ADD  HL,BC
 LF34B:  IN   A,(P8F)      ;Command / Status
         BIT  3,A
         JR   Z,LF34B      ;wait resp. DRQ active.
-        LD   HL,(DF513)
+        LD   HL,(DMA3)
         LD   BC,0088H     ;B = 0 (counter), C = I/O address (Data Register)
         INIR
         INIR              ;512 bytes gesamt lesen
@@ -2024,7 +2035,7 @@ LF361:  IN   A,(P8F)      ;Command / Status
 LF366:  IN   A,(P8F)      ;Command / Status
         BIT  3,A
         JR   Z,LF366      ;wait resp. DRQ active.
-        LD   HL,(DF513)
+        LD   HL,(DMA3)
         LD   BC,0088H     ;B = 0 (counter), C = I/O address (Data Register)
         OTIR             
         OTIR              ;512 bytes gesamt schreiben 
@@ -2056,12 +2067,12 @@ COLO2:  DEFB 0            ;Farbe fuer Monitor und CP/M Warmstart
 RAFTRK: DEFB 0            ;RAFTRK EQU 0F4C2H
 RAFSEC: DEFB 0
 ;
-CUFLAG: DEFB 1            ;CUON/CUOFF  KursorFlag  F4CDh
-STZ00:  DEFB 0            ;Merkzelle Anz. BS-Steuerzeichen  F4CFh
+CUFLAG: DEFB 1            ;CUON/CUOFF  KursorFlag
+STZ00:  DEFB 0            ;Merkzelle Anz. BS-Steuerzeichen
 STZ01:  DEFB 0            ;Merkzelle fuer 1. ESC-Steuerzeichen
 STZ02:  DEFB 0            ;Merkzelle fuer 2. ESC-Steuerzeichen
 ;
-CHAR:   DEFB 0            ;Merkzelle Zeichen <> Cursor  F4D2h
+CHAR:   DEFB 0            ;Merkzelle Zeichen <> Cursor
 ;
 SPCIN:  DEFW 0            ;Merkzelle Stackpointer waehrend CONIN
 SPCOUT: DEFW 0            ;Merkzelle Stackpointer waehrend CONOUT
@@ -2087,7 +2098,7 @@ DF4F0:  NOP
 DF4F7:  NOP
 DF4F8:  NOP
 CTCCNT: DEFB 0            ;CTC-Counter - Zusatzzaehler fuer CTC-Interrupt
-LATPU:  NOP               ;Latch fuer den Floppy-Controler
+LATPU:  DEFB 0            ;Latch fuer den Floppy-Controler
 ;
 ;hier beginnt eine Bytefolge fuer Read/Write Operationen
 ;
@@ -2096,29 +2107,27 @@ DRIVE:  DEFB 0            ;LW-Nr.
 TRACK:  DEFW 0            ;akt. Track
 SECTOR: DEFW 0            ;akt. Sektor
 DMA:    DEFW 0            ;DMA-Adresse
-DPH:    DEFW 0
+DPH:    DEFW 0            ;akt. DPH
 ;
-DF505:  DEFB 0            ;9 Bytes Kopie ab DRIVE:
-DF506:  DEFW 0
-DF508:  DEFW 0
-DF50A:  DEFW 0
-        DEFW 0            ;Ende 9 Bytes
+DRV2:   DEFB 0            ;9 Bytes Kopie ab DRIVE:
+TRK2:   DEFW 0
+SEC2:   DEFW 0
+DMA2:   DEFW 0            ;DMA-Adresse
+        DEFW 0
 ;
-DF50E:  NOP               ;9 Bytes Kopie ab DRIVE: bzw. DF505:
-DF50F:  NOP
-DF510:  NOP
-DF511:  DEFB 0
-DF512:  DEFB 0
-DF513:  DEFW 0            ;Adresse akt. DISKPuffer
-DF515:  DEFW 0            ;zugeordneter DPH - Ende 9 Bytes
+DRV3:   DEFB 0            ;9 Bytes Kopie ab DRIVE:
+TRK3:   DEFW 0
+SEC3:   DEFW 0
+DMA3:   DEFW 0            ;DMA-Adresse
+DPH3M:  DEFW 0            ;Merkzelle akt. DPH
 ;
-DF517:  DEFB 4            ;4 = READ, 6 = WRITE
+MERKRW: DEFB 4            ;Merkzelle: 4 = READ, 6 = WRITE
 DF518:  DEFW 0
 DF51A:  DEFB 0
-DF51B:  NOP
-DF51C:  NOP
-DF51D:  NOP
-DF51E:  NOP
+DF51B:  DEFB 0
+DF51C:  DEFB 0
+DF51D:  DEFB 0
+DF51E:  DEFB 0
 ;
 DISKP:  DEFS 1024,0       ;HW-Sektor Puffer aller LW (1k max. fuer FDD)
 DIRBF:  DEFS 128,0        ;1 REC Puffer fuer Direktory
