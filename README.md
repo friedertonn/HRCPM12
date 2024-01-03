@@ -10,14 +10,15 @@ Für den CCP und das BDOS wurden CP/A-Assemblerquellen von Volker Pohlers verwen
 https://hc-ddr.hucki.net/wiki/doku.php/cpm/cpa
 
 Im BIOS wurden eine Reihe von Änderungen (Fehlerbehebung und neue Features) vorgenommen:
-- fehlerhafte Maskierung des USER-Bytes in WBOOT entfernt
+- Maskierung des USER-Bytes in WBOOT entfernt
 - GIDE-Laufwerke (C:, D:, E:) auf 8 MByte begrenzt
 - Konsolenkommandos: Kursor-ON / Kursor-OFF
 - Kursorblinken im Texteditor
 - Automatische Erkennung der RAM-Disk-Größe: 256 / 512 / 1024 / 2048 KByte
-- I/O-Adresse von Modul-1 korrigiert
 
 Das Assemblieren des Quellcodes erfolgt mit SUBMIT.COM: **SUBMIT CPM**
+
+Kompilierte Binarys sind unter https://github.com/friedertonn/HRCPM12/releases zu finden.
 
 Nachfolgend ein Bildschirmcopy von HRCPM12 im JKCEMU:
 
