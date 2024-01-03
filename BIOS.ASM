@@ -1,8 +1,8 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 21.12.2023  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 03.01.2024  *
 ; *                                                         *
-; *                                                  V.139  *
+; *                                                  V.140  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -350,7 +350,7 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
         DEFM "11.01.89 FA-MODE "
-        DEFM "vom 18.12.2023 V.139"
+        DEFM "vom 03.01.2024 V.140"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -460,7 +460,7 @@ BOOT4:  CALL OUTTXT
         CALL OUTTXT
         EI
         CALL CONIN
-        RES  5,A          ;Grossbuchstaben
+        RES  5,A          ;Upcase
         CP   4AH          ;J --> RAM-Disk formatieren
         CALL Z,RDFORM
         LD   HL,8000H     ;POWER.COM nach 100h kopieren
@@ -476,7 +476,7 @@ WBOOT:  LD   SP,CPMSTK
         LD   A,(DF51B)
         OR   A
         CALL NZ,LF0CE
-        LD   B,2CH        ;44 Records CCP+BDOS
+        LD   B,2CH        ;44 Bloecke CCP+BDOS
         LD   HL,READ
         LD   (WRCCP2),HL
         CALL WRCCP        ;wirklich READCCP !
@@ -696,7 +696,7 @@ CONIN3: DEC  A            ;DEC Anzahl_der_Zeichen_im_Tastaturpuffer
         LD   HL,ZEIPUF+2
         LD   DE,ZEIPUF+1
         LD   BC,001FH
-        LDIR              ;alle Zeichen im Puffer rücken 1 Pos. n. links
+        LDIR              ;alle Zeichen im Puffer ruecken 1 Pos. n. links
         POP  HL
         POP  DE
         POP  BC
@@ -1342,9 +1342,12 @@ TXTRDE: DEFM "RFL ERROR!"
 ;
 RDTEST: XOR  A            ;Kapazitaet der RAM-Disk testen
         OUT  (PE0+6),A    ;H-Adresse ruecksetzen
+        LD   C,PE0        ;Test erfolgt in der 1. RAM-Bank
+;
+; Inhalte der 4 RAM-Testzellen sichern
+;
         LD   HL,RDMERK    ;Merkzellen im RAM
         LD   B,4          ;4 Durchlaeufe
-        LD   C,PE0        ;Test erfolgt in der 1. RAM-Bank
         LD   D,4          ;Startwert Extended-Adresse
 RDTST1: XOR  A
         OUT  (PE0+7),A    ;L-Adresse ruecksetzen
@@ -1352,13 +1355,21 @@ RDTST1: XOR  A
         OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
         IN   A,(C)
         LD   (HL),A       ;Daten aus der RAM-Disk sichern
-        XOR  A
-        OUT  (PE0+7),A    ;L-Adresse ruecksetzen
-        LD   A,D
-        OUT  (C),A        ;Testwert in die RAM-Disk schreiben
         INC  HL           ;Merkzelle++
         SRL  D            ;0 --> D7 --> D0 --> CY
         DJNZ RDTST1
+;
+; 4 Testwerte in die RAM-Disk schreiben
+;
+        LD   B,4          ;4 Durchlaeufe
+        LD   D,4          ;Startwert Extended-Adresse
+RDTST2: XOR  A
+        OUT  (PE0+7),A    ;L-Adresse ruecksetzen
+        LD   A,D
+        OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
+        OUT  (C),A        ;Testwert in die RAM-Disk schreiben
+        SRL  D            ;0 --> D7 --> D0 --> CY
+        DJNZ RDTST2
 ;
 ;Tabelle der Test-Werte (mit *...* sind die zu testenden Werte):
 ;
@@ -1368,28 +1379,31 @@ RDTST1: XOR  A
 ;Extended-Adresse=00000001B    0     *1*     1      1
 ;Extended-Adresse=00000000B   *0*     0      0      0
 ;
+; Groesse der RAM-Disk bestimmen
+;
         LD   B,4          ;4 Durchlaeufe
         LD   D,4          ;Startwert Extended-Adresse
-RDTST2: XOR  A
+RDTST3: XOR  A
         OUT  (PE0+7),A    ;L-Adresse ruecksetzen
         LD   A,D
         OUT  (PE0+5),A    ;Extended-Adresse auswaehlen
         IN   A,(C)
         CP   D
-        JR   Z,RDTST3     ;2048(B=4),1024(B=3),512(B=2),256(B=1)
+        JR   Z,RDTST4     ;2048(B=4),1024(B=3),512(B=2),256(B=1)
         SRL  D            ;0 --> D7 --> D0 --> CY
-        DJNZ RDTST2
+        DJNZ RDTST3
         JP   RDERRO       ;Fehler: hier stimmt was nicht!
 ;
-RDTST3: LD   HL,RDSIZE
+RDTST4: LD   HL,RDSIZE
         DEC  B
         LD   (HL),B       ;RD-Size: 0=256K 1=512K 2=1024K 3=2048K
 ;
-        LD   HL,RDMERK+3  ;Merkzellen RAM (in die RD zurueck)
+; gesicherte Daten in die RAM-Disk zurueckschreiben
+; 
+        LD   HL,RDMERK+3  ;Merkzellen RAM (letzter Eintrag)
         INC  B            ;1 bis 4 Durchlaeufe, je nach RDSIZE
-        LD   C,PE0        ;1. RAM-Bank
         LD   D,1          ;Startwert Ext.-Adr. (1 Bit n. rechts)
-RDTST4: XOR  A
+RDTST5: XOR  A
         OUT  (PE0+7),A    ;L-Adresse ruecksetzen
         LD   A,D
         SRL  A            ;0 --> A7 --> A0 --> CY
@@ -1398,8 +1412,8 @@ RDTST4: XOR  A
         OUT  (C),A        ;urspruengliche Daten zurueckschreiben
         DEC  HL
         SLA  D            ;CY <-- D7 <-- D0 <-- 0
-        DJNZ RDTST4       ;WICHTIG: nicht mehr als notwendig
-        RET               ;in die RAM-Disk zurückschreiben!!
+        DJNZ RDTST5       ;WICHTIG: nicht mehr als notwendig
+        RET               ;in die RAM-Disk zurueckschreiben!
 ;
 RDMERK: DEFS 4,0          ;4 Merkzellen fuer den RAM
 RDSIZE: DEFB 0            ;RD-Size: 0=256K 1=512K 2=1024K 3=2048K
@@ -1470,14 +1484,14 @@ RDFOR2: OUT  (C),B        ;H-Adresse setzen
         RET
 ;
 WRCCP:  PUSH BC           ;CCP+BDOS in Systemtrack schreiben
-        LD   C,00H        ;LW A:
+        LD   C,0          ;LW A:
         CALL SELDSK
         POP  BC
         LD   HL,0000H
         LD   (TRACK),HL   ;Track 0
         EX   DE,HL
         LD   HL,CCP
-WRCCP1: LD   (SECTOR),DE
+WRCCP1: LD   (SECTOR),DE  ;Sektor 0 ff.
         LD   (DMA),HL
         PUSH BC
         DEFB 0CDH         ;CALL WRITE -> CD ED CA
