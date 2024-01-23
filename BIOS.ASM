@@ -1,8 +1,8 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 03.01.2024  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 23.01.2024  *
 ; *                                                         *
-; *                                                  V.140  *
+; *                                                  V.141  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -16,10 +16,8 @@
 ; - Kursorblinken im Texteditor
 ; - Consolenkommandos Kursor-ON / Kursor-OFF
 ; - RAM-Disk mit 64 REC/TRK, Systemspur auf 8K reduziert
-; - GIDE-Laufwerke (C:, D:, E:) auf 8MB, da nicht alle BDOS'se mit mehr
-;   als 16 Bit fuer REC-NR. zurechtkommen.
+; - GIDE-Laufwerke (C:, D:, E:) auf 8MByte verkleinert
 ; - Formatierung RAM-Disk: letzter Sektor wurde nicht formatiert
-; - falsche I/O-Adresse von Modul1
 ; - ISR angepasst, damit HRCPM12 mit JKCEMU V0.9.8.3 funktioniert
 ;
 ; Neu hinzugekommen:
@@ -27,8 +25,8 @@
 ; - WBOOT loescht CCPPUFLEN, weil in Systemspur "aktiver Befehl" (V.133)
 ; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero) (V.133)
 ; - Tastaturpuffer von FFD0h -> FF00h , "d"-Befehl ueberschrieben (V.134)
-; - nicht benutzte "Arbeitszellen" am Ende auskommentiert (V.135)
-; - automatische Erkennung der RAM-Disk 256k/512k/1024k/2048k (V.136)
+; - nicht benutzte RAM-Zellen am Ende auskommentiert (V.135)
+; - automatische Erkennung der RAM-Disk 256k/512k/1024k/2048k (V.140)
 ;
 ;
         .CREF
@@ -82,7 +80,7 @@ LATCH   EQU  45H          ;IO-Adr. Latch 74LS175
 ;
 CUZEI   EQU  0FH          ;KursorSymbol
 ;
-;============================================================================
+;******************************   Sprungverteiler   ******************************
 ;
         JP   BOOT
         JP   WBOOT
@@ -350,7 +348,7 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
         DEFM "11.01.89 FA-MODE "
-        DEFM "vom 03.01.2024 V.140"
+        DEFM "vom 23.01.2024 V.141"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -372,7 +370,7 @@ TXT01D: DEFM "2048k"
 TXT02:  DEFM " --> Format A:(J)?"
         DEFB 0
 ;
-;******************************   BOOT   *******************************
+;******************************   BOOT   ******************************
 ;
 BOOT:   DI
         LD   SP,CPMSTK
@@ -383,7 +381,7 @@ BOOT:   DI
         IN   A,(P05)
         RES  3,A          ;BildInvers (PIO1B) Bit3 aus
         OUT  (P05),A
-        LD   HL,(BREAK)   ;Sprungtabelle NMI MONITOR
+        LD   HL,(BREAK)   ;Sprungtabelle NMI Monitor
         LD   (OLDNMI),HL  ;sichern
         LD   HL,WBOOTB    ;CP/M-Warmstart-Einsprungadresse
         LD   (BREAK),HL
@@ -463,13 +461,13 @@ BOOT4:  CALL OUTTXT
         RES  5,A          ;Upcase
         CP   4AH          ;J --> RAM-Disk formatieren
         CALL Z,RDFORM
-        LD   HL,8000H     ;POWER.COM nach 100h kopieren
-        LD   DE,0100H
-        LD   BC,4000H
-        LDIR
+;       LD   HL,8000H     ;POWER.COM nach 100h kopieren
+;       LD   DE,0100H
+;       LD   BC,4000H
+;       LDIR
         JR   WBOOT1
 ;
-;*******************************   WBOOT   *****************************
+;******************************   WBOOT   ******************************
 ;
 WBOOT:  LD   SP,CPMSTK
         CALL CPMMOD
@@ -498,22 +496,23 @@ WBOOT1: CALL BOOT1        ;CP/M "Grundseite" INIT
         JP   CCP          ;JP CCP
 ;
 ;
-CPMERR: PUSH AF           ;CP/M-Fehler - zurueck z. MONITOR
+CPMERR: PUSH AF           ;CP/M-Fehler - zurueck z. Monitor
         PUSH HL
         CALL EXIT1
         RST  18H
-        DEFM " CP"
-        DEFB 4DH+80H      ;"M+80H
+        DEFB 0DH
+        DEFM "CP/M-Fehler:"
+        DEFB 20H+80H
         POP  HL
         POP  AF
-        CALL RSA
+        CALL RSA          ;CPU-Register nach RSA - nicht Monitor 11 !
         POP  HL
         DEC  HL
         CALL OUTHL
         RST  18H
         DEFB 0DH+80H
-        CALL REGIST       ;MONI - Registeranzeige - nicht Monitor 11 !
-        RST  38H          ;zurueck zum MONI
+        CALL REGIST       ;Monitor - Registeranzeige - nicht Monitor 11 !
+        RST  38H          ;zurueck zum Monitor
 ;
 ;
 BOOT1:  LD   A,0C3H       ;CP/M "Grundseite" INIT
@@ -530,7 +529,7 @@ BOOT1:  LD   A,0C3H       ;CP/M "Grundseite" INIT
         LD   (DMA),HL
         RET
 ;
-;+++++++++++++++++++++++++++++++++   Ende BOOT / WBOOT   +++++++++++++++++
+;******************************   Ende BOOT / WBOOT   ******************************
 ;
 CPMMOD: PUSH AF           ;CP/M EIN
         LD   A,01H
@@ -548,10 +547,9 @@ MOD1:   OUT  (P1E),A
 ;
 EXIT:   LD   HL,0000H     ;Ruecksprungadresse fuer RET
         PUSH HL
-EXIT1:  XOR  A
+EXIT1:  XOR  A            ;Einsprung aus CPMERR
         LD   (COMLEN),A   ;auf Laenge=0 setzen
         OUT  (P1E),A      ;AC1-Mode
-        OUT  (P14),A      ;Modul_1 - ggf. EPROMs ausblenden
         LD   HL,(OLDNMI)
         LD   (BREAK),HL   ;alten NMI wiederherstellen
         LD   A,03H
@@ -564,7 +562,7 @@ EXIT1:  XOR  A
         OUT  (P06),A      ;PIO1 A: "Mode 3" + "Set Mode"
         LD   A,0FFH
         OUT  (P06),A      ;PIO1 A: PA0 bis PA7 sind Eingaenge
-        RET               ;zurueck zum MONITOR, normal
+        RET               ;zurueck zum Monitor
 ;
 ;
 ;Interrupt-Einsprung fuer die Tastatur
@@ -651,7 +649,7 @@ TEXT2:  POP  AF
         POP  BC
         RET
 ;
-;************************   CONST   *************************
+;******************************   CONST   ******************************
 ;
 CONST:  LD   A,(ZEIPUF)
         OR   A
@@ -659,7 +657,7 @@ CONST:  LD   A,(ZEIPUF)
         LD   A,0FFH
         RET
 ;
-;***************************   CONIN   ***********************
+;******************************   CONIN   ******************************
 ;
 CONIN:  DI
         LD   (SPCIN),SP
@@ -704,7 +702,7 @@ CONIN3: DEC  A            ;DEC Anzahl_der_Zeichen_im_Tastaturpuffer
         EI
         RET
 ;
-;***************************   LIST   ************************
+;******************************   LIST   ******************************
 ;
 LIST:   DI
         CALL AC1MOD
@@ -712,27 +710,27 @@ LIST:   DI
         LD   A,C
         CP   0AH  
         JR   Z,LIST1  
-        CALL MV24A        ;MONI V24 Ausgabe Akku
+        CALL MV24A        ;Monitor V24 Ausgabe Akku
         CP   0DH     
         JR   NZ,LIST1 
         LD   A,0AH   
-        CALL MV24A        ;MONI V24 Ausgabe Akku
+        CALL MV24A        ;Monitor V24 Ausgabe Akku
 LIST1:  POP  AF      
         CALL CPMMOD
         EI
         RET
 ;
-;***************************   PUNCH   ***********************
+;******************************   PUNCH   ******************************
 ;
 PUNCH:  DI                ;Ausgabe C nach V24
         LD   A,C
         CALL AC1MOD
-        CALL MV24A        ;MONI V24 Ausgabe Akku
+        CALL MV24A        ;Monitor V24 Ausgabe Akku
         CALL CPMMOD
         EI
         RET
 ;
-;******************************* CONOUT  *********************
+;******************************   CONOUT   ******************************
 ;
 ;       Ausgabe eines Zeichens,   IN: Zeichen in C
 ;
@@ -1201,13 +1199,13 @@ BWSINI: XOR  A            ;Farbbyte auf Monochrom setzen
         LD   (COLO2),A    ;Merkzelle fuer WBOOT im BIOS
         RET
 ;
-;+++++++++++++++++++++++++++++   Ende CONOUT  ++++++++++++++++
+;******************************   LISTST   ******************************
 ;
 LISTST: XOR  A
         DEC  A
         RET
 ;
-;--------------------------------------------------------------------------
+;******************************   SELDSK   ******************************
 ;
 SELDSK: LD   HL,NDISK     ;max. Anzahl der LW
         LD   A,C          ;C = akt. LW
@@ -1230,17 +1228,23 @@ SELDSK: LD   HL,NDISK     ;max. Anzahl der LW
         LD   (DPH),HL     ;zugeordneter DPH --> HL
         RET
 ;
-;--------------------------------------------------------------------------
+;******************************   HOME   ******************************
 ;
 HOME:   LD   BC,0000H
 SETTRK: LD   (TRACK),BC
         RET
 ;
+;******************************   SETSEC   ******************************
+;
 SETSEC: LD   (SECTOR),BC
         RET
 ;
+;******************************   SETDMA   ******************************
+;
 SETDMA: LD   (DMA),BC
         RET
+;
+;******************************   SECTRN   ******************************
 ;
 SECTRN: LD   H,B
         LD   L,C
@@ -1254,7 +1258,7 @@ SECTRN: LD   H,B
         LD   H,D
         RET
 ;
-;--------------------------------------------------------------------------
+;******************************   READ + WRITE   ******************************
 ;
 READ:   LD   C,02H
         LD   A,04H
@@ -1286,7 +1290,7 @@ RWEND:  OR   A
         LD   A,01H        ;Fehler
         RET
 ;
-;************************  RAM-Disk   ******************************
+;******************************   RAM-Disk   ******************************
 ;
 RWRDSK: LD   C,(HL)       ;RWBYTE: 04 = Lesen; 06 = Schreiben 
         INC  HL           ;DRIVE wird uebersprungen
@@ -1339,6 +1343,8 @@ TXTRDO: DEFM "OK"
 TXTRDE: DEFM "RFL ERROR!"
         DEFB 0DH,0AH
         DEFB 0
+;
+; Test der RAM-Disk - Größe (256 / 512 / 1024 / 2048 KByte)
 ;
 RDTEST: XOR  A            ;Kapazitaet der RAM-Disk testen
         OUT  (PE0+6),A    ;H-Adresse ruecksetzen
@@ -1415,7 +1421,7 @@ RDTST5: XOR  A
         DJNZ RDTST5       ;WICHTIG: nicht mehr als notwendig
         RET               ;in die RAM-Disk zurueckschreiben!
 ;
-RDMERK: DEFS 4,0          ;4 Merkzellen fuer den RAM
+RDMERK: DEFS 4,0          ;4 Merkzellen fuer den RAM-Disk Test
 RDSIZE: DEFB 0            ;RD-Size: 0=256K 1=512K 2=1024K 3=2048K
 ;
 RDFORM: LD   HL,TXTRDI    ;Formatierungstext...
@@ -1548,13 +1554,9 @@ ADRAF3: PUSH AF
         LD   HL,(DMA)
         RET
 ;
-;**********************  Ende  RAM-Disk  *********************
-;
-;*************************  LOAD-Befehl  *********************
+;******************************  LOAD  ******************************
 ;
 LOAD:   RET
-;
-;******************************   Ende LOAD  *****************
 ;
 LEFFA:  LD   HL,(DPH)     ;zugeordneter DPH --> HL
         LD   (DPH3M),HL   ;Merkzelle DPH
@@ -2072,7 +2074,7 @@ CINSP:  DEFM "CONOUT-STACK_CONOUT-STACK_CONOUT-STACK"
 COUTSP: DEFM "ZBIOS(C)ML-SOFT 2003 & AC1-BIOS(C)HR 2011"
 CPMSTK: NOP
 ;
-;****************  Ende CP/M StackBereich  *******************
+;******************************  Ende CP/M-Stack  ******************************
 ;
 COLOR:  DEFB 0            ;Merkzelle aktuelle BWS-Farbe (0=Monochrom)
 COLO1:  DEFB 0            ;aktuelle Farbe ohne invers und intensiv
@@ -2166,7 +2168,7 @@ DFF86   EQU  0FF86H       ;Interrupt-Einsprungpunkt CTC Kanal 3
 DFF88   EQU  0FF88H       ;Interrupt-Einsprungpunkt Nr.1 PIO1A
 DFF8A   EQU  0FF8AH       ;Interrupt-Einsprungpunkt Nr.2 PIO1A
 ;
-;#############################   PortAdressen   ##############
+;******************************   PortAdressen   ******************************
 ;
 P00     EQU  00H          ;CTC Kanal 0
 P01     EQU  01H          ;CTC Kanal 1
@@ -2176,8 +2178,6 @@ P03     EQU  03H          ;CTC Kanal 3
 P04     EQU  04H          ;PIO_A-Daten
 P05     EQU  05H          ;PIO_B-Daten
 P06     EQU  06H          ;PIO_A-Control
-;
-P14     EQU  14H          ;Modul_1 - ggf. EPROMs ausblenden
 ;
 P1E     EQU  1EH          ;CP/M - Umschalter
 ;
@@ -2191,4 +2191,4 @@ P8F     EQU  8FH          ;GIDE Command/Status
         .DEPHASE
         END
 ;
-
+
