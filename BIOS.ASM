@@ -1,15 +1,15 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 23.01.2024  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 27.02.2024  *
 ; *                                                         *
-; *                                                  V.141  *
+; *                                                  V.142  *
 ; *                                                         *
 ; ***********************************************************
 ;
 ; Korrekturen/Fehlerbehebungen:
 ; - alle nicht genutzten Programmteile (HRDOS12) entfernt
 ; - (Turbo-)LOAD entfernt
-; - BWS(Farb)Init geaendert
+; - BWS (Farb-)Init geaendert
 ; - ^G BEEP + PUNCH:=V24out + LIST:=V24out hinzugefuegt
 ; - keine Pruefsumme, kein Vergleichslesen der RAM-Disk (entfernt)
 ; - fehlerhafte Maskierung USER in WBOOT entfernt
@@ -24,9 +24,10 @@
 ; - EXIT loescht CCPPUFLEN (V.132)
 ; - WBOOT loescht CCPPUFLEN, weil in Systemspur "aktiver Befehl" (V.133)
 ; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero) (V.133)
-; - Tastaturpuffer von FFD0h -> FF00h , "d"-Befehl ueberschrieben (V.134)
+; - Tastaturpuffer von FFD0h -> FF00h, "d"-Befehl ueberschrieben (V.134)
 ; - nicht benutzte RAM-Zellen am Ende auskommentiert (V.135)
 ; - automatische Erkennung der RAM-Disk 256k/512k/1024k/2048k (V.140)
+; - Änderungen an READ_CCP (V.142)
 ;
 ;
         .CREF
@@ -75,7 +76,7 @@ PF0     EQU  0F0H         ;BWS-CPLD-(Steuer)Port
 ;
 CFDC    EQU  40H          ;Hauptstatusregister FDC
 DFDC    EQU  41H          ;Datenport FDC
-WAIT    EQU  43H          ;IO-Adr. /WAIT Monoflop
+FLWAIT  EQU  43H          ;IO-Adr. /WAIT Monoflop
 LATCH   EQU  45H          ;IO-Adr. Latch 74LS175
 ;
 CUZEI   EQU  0FH          ;KursorSymbol
@@ -348,7 +349,7 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
         DEFM "11.01.89 FA-MODE "
-        DEFM "vom 23.01.2024 V.141"
+        DEFM "vom 27.02.2024 V.142"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -379,7 +380,7 @@ BOOT:   DI
         LD   (LATPU),A    ;FDC-Latch zuruecksetzen
         CALL BWSINI
         IN   A,(P05)
-        RES  3,A          ;BildInvers (PIO1B) Bit3 aus
+        RES  3,A          ;ACC-Zeichensatz ein (PIO1B, Bit3)
         OUT  (P05),A
         LD   HL,(BREAK)   ;Sprungtabelle NMI Monitor
         LD   (OLDNMI),HL  ;sichern
@@ -460,12 +461,12 @@ BOOT4:  CALL OUTTXT
         CALL CONIN
         RES  5,A          ;Upcase
         CP   4AH          ;J --> RAM-Disk formatieren
-        CALL Z,RDFORM
-;       LD   HL,8000H     ;POWER.COM nach 100h kopieren
+        JP   Z,RDFORM
+;       LD   HL,6000H     ;FC64.COM von 6000h nach 100h kopieren
 ;       LD   DE,0100H
-;       LD   BC,4000H
+;       LD   BC,5880H     ;5880h Bytes
 ;       LDIR
-        JR   WBOOT1
+        JR   WBOOT1       ;READCCP ueberspringen
 ;
 ;******************************   WBOOT   ******************************
 ;
@@ -477,9 +478,9 @@ WBOOT:  LD   SP,CPMSTK
         LD   B,2CH        ;44 Bloecke CCP+BDOS
         LD   HL,READ
         LD   (WRCCP2),HL
-        CALL WRCCP        ;wirklich READCCP !
-        LD   HL,WRITE
-        LD   (WRCCP2),HL
+        CALL WRCCP        ;hier READ_CCP!
+;       LD   HL,WRITE
+;       LD   (WRCCP2),HL
         XOR  A
         LD   (COMLEN),A   ;auf Laenge=0 setzen
 ;
@@ -493,8 +494,7 @@ WBOOT1: CALL BOOT1        ;CP/M "Grundseite" INIT
         LD   A,(LWBYTE)
         LD   C,A
         CALL SELDSK
-        JP   CCP          ;JP CCP
-;
+        JP   CCP          ;hier beginnt die Party
 ;
 CPMERR: PUSH AF           ;CP/M-Fehler - zurueck z. Monitor
         PUSH HL
@@ -513,7 +513,6 @@ CPMERR: PUSH AF           ;CP/M-Fehler - zurueck z. Monitor
         DEFB 0DH+80H
         CALL REGIST       ;Monitor - Registeranzeige - nicht Monitor 11 !
         RST  38H          ;zurueck zum Monitor
-;
 ;
 BOOT1:  LD   A,0C3H       ;CP/M "Grundseite" INIT
         LD   (WARMBT),A
@@ -1487,7 +1486,7 @@ RDFOR2: OUT  (C),B        ;H-Adresse setzen
         JP   NZ,CPMERR
         LD   HL,TXTRDO    ;"OK"
         CALL OUTTXT
-        RET
+        JP   WBOOT1
 ;
 WRCCP:  PUSH BC           ;CCP+BDOS in Systemtrack schreiben
         LD   C,0          ;LW A:
@@ -1894,7 +1893,7 @@ RW01:   IN   A,(CFDC)     ;Lese Hauptstatusregister
         DEFB 0EDH         ;ED A2 = INI
 MODE0:  DEFB 0A2H         ;ED A3 = OUTI
         NOP
-RW02:   OUT  (WAIT),A     ;WAIT bis Interrupt FDC
+RW02:   OUT  (FLWAIT),A   ;WAIT bis Interrupt FDC
         NOP
         DEFB 0EDH         ;ED A2 = INI
 MODE1:  DEFB 0A2H         ;ED A3 = OUTI
