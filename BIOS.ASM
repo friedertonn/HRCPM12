@@ -1,8 +1,8 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 27.02.2024  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 11.04.2024  *
 ; *                                                         *
-; *                                                  V.142  *
+; *                                                  V.143  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -19,6 +19,7 @@
 ; - GIDE-Laufwerke (C:, D:, E:) auf 8MByte verkleinert
 ; - Formatierung RAM-Disk: letzter Sektor wurde nicht formatiert
 ; - ISR angepasst, damit HRCPM12 mit JKCEMU V0.9.8.3 funktioniert
+; - Fehlermeldung "Bdos Err On P: Select" in WBOOT behoben
 ;
 ; Neu hinzugekommen:
 ; - EXIT loescht CCPPUFLEN (V.132)
@@ -349,7 +350,7 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
         DEFM "11.01.89 FA-MODE "
-        DEFM "vom 27.02.2024 V.142"
+        DEFM "vom 11.04.2024 V.143"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -479,10 +480,17 @@ WBOOT:  LD   SP,CPMSTK
         LD   HL,READ
         LD   (WRCCP2),HL
         CALL WRCCP        ;hier READ_CCP!
-;       LD   HL,WRITE
-;       LD   (WRCCP2),HL
         XOR  A
         LD   (COMLEN),A   ;auf Laenge=0 setzen
+        LD   A,(NDISK)    ;Anzahl der LW
+        LD   C,A
+        LD   A,(LWBYTE)
+        AND  0FH          ;LW testen
+        CP   C
+        JR   C,WBOOT1     ;akt. LW < NDISK
+        LD   A,(LWBYTE)
+        AND  0F0H         ;LW ruecksetzen
+        LD   (LWBYTE),A
 ;
 WBOOT1: CALL BOOT1        ;CP/M "Grundseite" INIT
         LD   A,01H        ;Kursor einschalten
@@ -493,7 +501,6 @@ WBOOT1: CALL BOOT1        ;CP/M "Grundseite" INIT
         LD   (COLO1),A    ;Arbeitszelle "Normaldarstellung"
         LD   A,(LWBYTE)
         LD   C,A
-        CALL SELDSK
         JP   CCP          ;hier beginnt die Party
 ;
 CPMERR: PUSH AF           ;CP/M-Fehler - zurueck z. Monitor
