@@ -16,6 +16,7 @@ Im BIOS wurden eine Reihe von Änderungen (Fehlerbehebung und neue Features) vor
 - Kursorblinken im Texteditor
 - Automatische Erkennung der RAM-Disk-Größe: 256 / 512 / 1024 / 2048 KByte
 - Fehlermeldung *Bdos Err On P: Select* behoben
+- Interrupt-Vektortabelle für Anwenderprogramme von 0xFF90 bis 0xFF9F
 
 Das Assemblieren des Quellcodes erfolgt mit SUBMIT.COM:
 ```

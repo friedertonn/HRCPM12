@@ -1,8 +1,8 @@
 ; ***********************************************************
 ; *                                                         *
-; *  HRCPM12-BIOS fuer den AC1      Version vom 11.04.2024  *
+; *  HRCPM12-BIOS fuer den AC1      Version vom 10.11.2026  *
 ; *                                                         *
-; *                                                  V.143  *
+; *                                                  V.144  *
 ; *                                                         *
 ; ***********************************************************
 ;
@@ -24,12 +24,14 @@
 ; Neu hinzugekommen:
 ; - EXIT loescht CCPPUFLEN (V.132)
 ; - WBOOT loescht CCPPUFLEN, weil in Systemspur "aktiver Befehl" (V.133)
-; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero) (V.133)
-; - Tastaturpuffer von FFD0h -> FF00h, "d"-Befehl ueberschrieben (V.134)
+; - Eintragen von NMI auf 066h in BOOT1 entfernt (CPM Page-Zero)
+; - Tastaturpuffer auf 0xFF00h verschoben (V.134)
 ; - nicht benutzte RAM-Zellen am Ende auskommentiert (V.135)
 ; - automatische Erkennung der RAM-Disk 256k/512k/1024k/2048k (V.140)
-; - Änderungen an READ_CCP (V.142)
-;
+; - Aenderungen an READ_CCP (V.142)
+; - BOOT kopiert den FileCommander von 0x7000h auf 0x0100h (V.143)
+; - Interrupt-Tabelle von 0xFF80 bis 0xFF8F fuer System-Funktionen (V.144)
+; - Interrupt-Tabelle von 0xFF90 bis 0xFF9F fuer User-Funktionen
 ;
         .CREF
         .Z80
@@ -61,8 +63,6 @@ IOBYTE  EQU  0003H
 LWBYTE  EQU  0004H        ;LW (Bit0-3) + USER Nr.(Bit4-7)
 ;
 ZEIPUF  EQU  0FF00H       ;1 + 32 Byte Puffer fuer Tastatur
-;                          --> war urspruenlich auf 0FFD0H
-;                          --> ueberschreibt den "d"-Befehl
 ;
 BDOS    EQU  0D806H       ;BDOS-EinsprungAdresse
 WBOOTB  EQU  0E603H       ;BIOS-Eisprung WBOOT
@@ -350,7 +350,7 @@ DP2048: DEFW 64           ;64 Sectoren/Track (Rec/Trk) = 8 Kbyte/Track
 TXT01:  DEFB 0CH
         DEFM "HRCPM AC1 V1.2 CPA "
         DEFM "11.01.89 FA-MODE "
-        DEFM "vom 11.04.2024 V.143"
+        DEFM "vom 10.11.2026 V.144"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "GIDE(80H) C0:8MB,"
         DEFM "   D0: 8MB   E0: 8MB"
@@ -394,6 +394,12 @@ BOOT:   DI
         LD   (LWBYTE),A
         LD   (ZEIPUF),A   ;Init. Tastaturpuffer
         CALL BOOT1        ;CP/M "Grundseite" INIT
+;
+        LD   HL,0FF00H    ;Speicherbereich von 0xFF00 bis 0xFF9F
+        LD   (HL),0       ;loeschen (wegen DVU21 und DVHD31)
+        LD   DE,0FF01H
+        LD   BC,9FH
+        LDIR
 ;
         LD   A,03H        ;CTC init. + Interrupt abgeschaltet
         OUT  (P00),A
@@ -458,15 +464,19 @@ BOOT3:  LD   HL,TXT01D    ;2048k
 BOOT4:  CALL OUTTXT
         LD   HL,TXT02     ;Formatieren? (J)
         CALL OUTTXT
+;
+; vor dem Formatieren der RAM-Disk den FileCommander auf 100h kopieren
+;
+        LD   HL,7000H
+        LD   DE,0100H
+        LD   BC,5A00H     ;5A00h Bytes
+        LDIR
+;
         EI
         CALL CONIN
         RES  5,A          ;Upcase
         CP   4AH          ;J --> RAM-Disk formatieren
         JP   Z,RDFORM
-;       LD   HL,6000H     ;FC64.COM von 6000h nach 100h kopieren
-;       LD   DE,0100H
-;       LD   BC,5880H     ;5880h Bytes
-;       LDIR
         JR   WBOOT1       ;READCCP ueberspringen
 ;
 ;******************************   WBOOT   ******************************
@@ -1350,7 +1360,7 @@ TXTRDE: DEFM "RFL ERROR!"
         DEFB 0DH,0AH
         DEFB 0
 ;
-; Test der RAM-Disk - Größe (256 / 512 / 1024 / 2048 KByte)
+; Test der RAM-Disk - Groesse (256 / 512 / 1024 / 2048 KByte)
 ;
 RDTEST: XOR  A            ;Kapazitaet der RAM-Disk testen
         OUT  (PE0+6),A    ;H-Adresse ruecksetzen
